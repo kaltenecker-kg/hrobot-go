@@ -28,6 +28,9 @@ vendor/
 # Local AI/agent tooling — not part of the project
 .claude
 
+# Git worktrees
+.worktrees/
+
 # The compiled binaries
 /hrobot
 /terraform-provider-hrobot
