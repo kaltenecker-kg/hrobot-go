@@ -6,28 +6,6 @@
   ...
 }:
 {
-  # This allows to load the terraform config from local directory instead
-  env.TF_CLI_CONFIG_FILE = pkgs.writeText ".tofurc" ''
-    provider_installation {
-      # Use from local directory
-      dev_overrides {
-        "midwork-finds-jobs/hrobot" = "${config.git.root}"
-      }
-      # For all other providers, use the registry as normal
-      direct {}
-    }
-  '';
-
-  scripts.build-all.exec = ''
-    go build -C ${config.git.root} -v -o terraform-provider-hrobot
-    go build -C ${config.git.root} -v -o hrobot ${config.git.root}/cmd/hrobot
-  '';
-
-  packages = with pkgs; [
-    # Needed to write GPG keys to release this into Terraform cloud
-    gnupg
-  ];
-
   # Provide GNU sed on macOS so scripts using GNU-only flags work consistently.
   scripts.sed.exec = ''
     ${pkgs.gnused}/bin/sed "$@"
@@ -35,8 +13,6 @@
 
   # https://devenv.sh/languages/
   languages.go.enable = true;
-  languages.opentofu.enable = true;
-  languages.terraform.enable = true;
 
   git-hooks.excludes = [
     ".devenv"
@@ -45,14 +21,8 @@
 
   # https://devenv.sh/reference/options/#git-hooks
   git-hooks.hooks = {
-    # TF
-    terraform-format.enable = true;
-    terraform-validate.enable = true;
     # Go files
-    golangci-lint = {
-      enable = true;
-      excludes = [ "tools/.*" ];
-    };
+    golangci-lint.enable = true;
     # Nix files
     nixfmt-rfc-style.enable = true;
     # Github Actions
@@ -60,8 +30,6 @@
     # Markdown files
     markdownlint = {
       enable = true;
-      # Docs for Terraform Cloud have different linting rules
-      excludes = [ "docs/.*" ];
       settings.configuration = {
         # Max 130 line length, except if it's code
         MD013 = {
