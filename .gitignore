@@ -10,7 +10,6 @@ devenv.local.yaml
 .pre-commit-config.yaml
 
 # Go build artifacts
-/hrobot
 *.out
 *.test
 *.prof
@@ -30,12 +29,3 @@ vendor/
 
 # Git worktrees
 .worktrees/
-
-# The compiled binaries
-/hrobot
-/terraform-provider-hrobot
-/cmd/hrobot/terraform-provider-hrobot
-
-# Don't store the secrets
-keys/*
-!keys/setup-gpg-secrets.sh
