@@ -1,7 +1,0 @@
-# yaml-language-server: $schema=https://devenv.sh/devenv.schema.json
-inputs:
-  nixpkgs:
-    url: github:cachix/devenv-nixpkgs/rolling
-
-# Allowing unfree is needed for terraform cli
-allowUnfree: true
