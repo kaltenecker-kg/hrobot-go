@@ -69,7 +69,6 @@ func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*Ser
 		formData.Set("single_values", "true")
 	}
 
-	// Try parsing directly as ServerTrafficData (without wrapper)
 	var result ServerTrafficData
 	if err := t.client.Post(ctx, path, formData, &result); err != nil {
 		return nil, err

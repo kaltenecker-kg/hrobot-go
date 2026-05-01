@@ -22,22 +22,14 @@ type WOLResponse struct {
 	ServerNumber  int    `json:"server_number"`
 }
 
-// WOLWrapper wraps the WOL response.
-type WOLWrapper struct {
-	WOL WOLResponse `json:"wol"`
-}
-
 // Send sends a Wake-on-LAN packet to the server.
 func (w *WOLService) Send(ctx context.Context, serverID ServerID) (*WOLResponse, error) {
-	var wrapper WOLWrapper
+	var resp WOLResponse
 	path := fmt.Sprintf("/wol/%s", serverID.String())
-
-	err := w.client.Post(ctx, path, nil, &wrapper)
-	if err != nil {
+	if err := w.client.Post(ctx, path, nil, &resp); err != nil {
 		return nil, err
 	}
-
-	return &wrapper.WOL, nil
+	return &resp, nil
 }
 
 // Get queries Wake-on-LAN data for a server, indicating whether WOL is
@@ -47,11 +39,10 @@ func (w *WOLService) Send(ctx context.Context, serverID ServerID) (*WOLResponse,
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-wol-server-number
 func (w *WOLService) Get(ctx context.Context, serverID ServerID) (*WOLResponse, error) {
-	var wrapper WOLWrapper
+	var resp WOLResponse
 	path := fmt.Sprintf("/wol/%s", serverID.String())
-
-	if err := w.client.Get(ctx, path, &wrapper); err != nil {
+	if err := w.client.Get(ctx, path, &resp); err != nil {
 		return nil, err
 	}
-	return &wrapper.WOL, nil
+	return &resp, nil
 }

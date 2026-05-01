@@ -53,18 +53,6 @@ type SubnetCancellation struct {
 	CancellationDate         *string `json:"cancellation_date"`
 }
 
-type subnetWrapper struct {
-	Subnet SubnetResource `json:"subnet"`
-}
-
-type subnetMACWrapper struct {
-	MAC SubnetMAC `json:"mac"`
-}
-
-type subnetCancellationWrapper struct {
-	Cancellation SubnetCancellation `json:"cancellation"`
-}
-
 // List returns all subnets.
 //
 // GET /subnet
@@ -72,7 +60,7 @@ type subnetCancellationWrapper struct {
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-subnet
 func (s *SubnetService) List(ctx context.Context) ([]SubnetResource, error) {
 	var subnets []SubnetResource
-	if err := s.client.GetWrappedList(ctx, "/subnet", "subnet", &subnets); err != nil {
+	if err := s.client.Get(ctx, "/subnet", &subnets); err != nil {
 		return nil, err
 	}
 	return subnets, nil
@@ -85,11 +73,11 @@ func (s *SubnetService) List(ctx context.Context) ([]SubnetResource, error) {
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-subnet-net-ip
 func (s *SubnetService) Get(ctx context.Context, netIP string) (*SubnetResource, error) {
 	path := fmt.Sprintf("/subnet/%s", url.PathEscape(netIP))
-	var w subnetWrapper
-	if err := s.client.Get(ctx, path, &w); err != nil {
+	var subnet SubnetResource
+	if err := s.client.Get(ctx, path, &subnet); err != nil {
 		return nil, err
 	}
-	return &w.Subnet, nil
+	return &subnet, nil
 }
 
 // Update updates traffic warning options for a subnet. All four fields are
@@ -106,11 +94,11 @@ func (s *SubnetService) Update(ctx context.Context, netIP string, trafficWarning
 	data.Set("traffic_daily", strconv.Itoa(trafficDaily))
 	data.Set("traffic_monthly", strconv.Itoa(trafficMonthly))
 
-	var w subnetWrapper
-	if err := s.client.Post(ctx, path, data, &w); err != nil {
+	var subnet SubnetResource
+	if err := s.client.Post(ctx, path, data, &subnet); err != nil {
 		return nil, err
 	}
-	return &w.Subnet, nil
+	return &subnet, nil
 }
 
 // GetMAC retrieves the MAC address configuration for a subnet.
@@ -120,11 +108,11 @@ func (s *SubnetService) Update(ctx context.Context, netIP string, trafficWarning
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-subnet-net-ip-mac
 func (s *SubnetService) GetMAC(ctx context.Context, netIP string) (*SubnetMAC, error) {
 	path := fmt.Sprintf("/subnet/%s/mac", url.PathEscape(netIP))
-	var w subnetMACWrapper
-	if err := s.client.Get(ctx, path, &w); err != nil {
+	var mac SubnetMAC
+	if err := s.client.Get(ctx, path, &mac); err != nil {
 		return nil, err
 	}
-	return &w.MAC, nil
+	return &mac, nil
 }
 
 // SetMAC sets the MAC address for a subnet to the supplied value, which must
@@ -138,11 +126,11 @@ func (s *SubnetService) SetMAC(ctx context.Context, netIP string, mac string) (*
 	data := url.Values{}
 	data.Set("mac", mac)
 
-	var w subnetMACWrapper
-	if err := s.client.Put(ctx, path, data, &w); err != nil {
+	var result SubnetMAC
+	if err := s.client.Put(ctx, path, data, &result); err != nil {
 		return nil, err
 	}
-	return &w.MAC, nil
+	return &result, nil
 }
 
 // DeleteMAC removes the custom MAC address assignment for a subnet, reverting
@@ -163,11 +151,11 @@ func (s *SubnetService) DeleteMAC(ctx context.Context, netIP string) error {
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-subnet-net-ip-cancellation
 func (s *SubnetService) GetCancellation(ctx context.Context, netIP string) (*SubnetCancellation, error) {
 	path := fmt.Sprintf("/subnet/%s/cancellation", url.PathEscape(netIP))
-	var w subnetCancellationWrapper
-	if err := s.client.Get(ctx, path, &w); err != nil {
+	var c SubnetCancellation
+	if err := s.client.Get(ctx, path, &c); err != nil {
 		return nil, err
 	}
-	return &w.Cancellation, nil
+	return &c, nil
 }
 
 // Cancel initiates cancellation of a subnet.

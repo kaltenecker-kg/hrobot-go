@@ -22,12 +22,17 @@ func TestUnwrapResponse(t *testing.T) {
 			expected: `{"id":123,"name":"test"}`,
 		},
 		{
-			// `data` is not a wrapper key in any Hetzner Robot endpoint;
-			// it must pass through untouched so payloads with a top-level
-			// `data` field (e.g. traffic responses) keep their structure.
-			name:     "data key passes through unwrapped",
+			// Single-key wrappers are auto-unwrapped regardless of name.
+			// Real traffic responses have multiple top-level fields (`type`,
+			// `from`, `to`, `data`), so the heuristic leaves them alone.
+			name:     "single-key wrapper auto-unwraps",
 			input:    `{"data":{"id":123}}`,
-			expected: `{"data":{"id":123}}`,
+			expected: `{"id":123}`,
+		},
+		{
+			name:     "multi-key object passes through",
+			input:    `{"type":"day","data":{"in":1}}`,
+			expected: `{"type":"day","data":{"in":1}}`,
 		},
 		{
 			name:     "wrapped in firewall key",
@@ -72,68 +77,56 @@ func TestUnwrapResponse(t *testing.T) {
 	}
 }
 
-func TestUnwrapArrayResponse(t *testing.T) {
+func TestUnwrapResponse_Array(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		wrapperKey string
-		expected   string
-		wantErr    bool
+		name     string
+		input    string
+		expected string
 	}{
 		{
-			name:       "wrapped servers",
-			input:      `[{"server":{"id":1,"name":"s1"}},{"server":{"id":2,"name":"s2"}}]`,
-			wrapperKey: "server",
-			expected:   `[{"id":1,"name":"s1"},{"id":2,"name":"s2"}]`,
-			wantErr:    false,
+			name:     "wrapped servers",
+			input:    `[{"server":{"id":1,"name":"s1"}},{"server":{"id":2,"name":"s2"}}]`,
+			expected: `[{"id":1,"name":"s1"},{"id":2,"name":"s2"}]`,
 		},
 		{
-			name:       "wrapped ips",
-			input:      `[{"ip":{"address":"1.2.3.4"}},{"ip":{"address":"5.6.7.8"}}]`,
-			wrapperKey: "ip",
-			expected:   `[{"address":"1.2.3.4"},{"address":"5.6.7.8"}]`,
-			wantErr:    false,
+			name:     "wrapped ips",
+			input:    `[{"ip":{"address":"1.2.3.4"}},{"ip":{"address":"5.6.7.8"}}]`,
+			expected: `[{"address":"1.2.3.4"},{"address":"5.6.7.8"}]`,
 		},
 		{
-			name:       "empty array",
-			input:      `[]`,
-			wrapperKey: "server",
-			expected:   `[]`,
-			wantErr:    false,
+			name:     "empty array",
+			input:    `[]`,
+			expected: `[]`,
 		},
 		{
-			name:       "single item",
-			input:      `[{"server":{"id":1}}]`,
-			wrapperKey: "server",
-			expected:   `[{"id":1}]`,
-			wantErr:    false,
+			name:     "single item",
+			input:    `[{"server":{"id":1}}]`,
+			expected: `[{"id":1}]`,
+		},
+		{
+			name:     "mixed keys returns input unchanged",
+			input:    `[{"server":{}},{"firewall":{}}]`,
+			expected: `[{"server":{}},{"firewall":{}}]`,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := unwrapArrayResponse([]byte(tt.input), tt.wrapperKey)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("unwrapArrayResponse() error = %v, wantErr %v", err, tt.wantErr)
+			result, err := unwrapResponse([]byte(tt.input))
+			if err != nil {
+				t.Fatalf("unwrapResponse() error = %v", err)
 			}
-			if tt.wantErr {
-				return
-			}
-
-			// Compare as normalized JSON
-			var resultJSON, expectedJSON any
-			if err := json.Unmarshal(result, &resultJSON); err != nil {
+			var got, want any
+			if err := json.Unmarshal(result, &got); err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
-			if err := json.Unmarshal([]byte(tt.expected), &expectedJSON); err != nil {
+			if err := json.Unmarshal([]byte(tt.expected), &want); err != nil {
 				t.Fatalf("failed to unmarshal expected: %v", err)
 			}
-
-			resultBytes, _ := json.Marshal(resultJSON)
-			expectedBytes, _ := json.Marshal(expectedJSON)
-
-			if string(resultBytes) != string(expectedBytes) {
-				t.Errorf("unwrapArrayResponse() = %s, want %s", string(resultBytes), string(expectedBytes))
+			gotBytes, _ := json.Marshal(got)
+			wantBytes, _ := json.Marshal(want)
+			if string(gotBytes) != string(wantBytes) {
+				t.Errorf("unwrapResponse() = %s, want %s", gotBytes, wantBytes)
 			}
 		})
 	}

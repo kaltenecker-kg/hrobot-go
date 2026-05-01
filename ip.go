@@ -149,10 +149,6 @@ type IPMAC struct {
 	MAC string `json:"mac"`
 }
 
-type ipMACWrapper struct {
-	MAC IPMAC `json:"mac"`
-}
-
 // GetMAC retrieves the separate MAC address for an IP, if one is set.
 //
 // GET /ip/{ip}/mac
@@ -160,11 +156,11 @@ type ipMACWrapper struct {
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-ip-ip-mac
 func (i *IPService) GetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
-	var wrapper ipMACWrapper
-	if err := i.client.Get(ctx, path, &wrapper); err != nil {
+	var mac IPMAC
+	if err := i.client.Get(ctx, path, &mac); err != nil {
 		return nil, err
 	}
-	return &wrapper.MAC, nil
+	return &mac, nil
 }
 
 // SetMAC generates a separate MAC address for an IP.
@@ -174,11 +170,11 @@ func (i *IPService) GetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
 // See: https://robot.hetzner.com/doc/webservice/en.html#put-ip-ip-mac
 func (i *IPService) SetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
-	var wrapper ipMACWrapper
-	if err := i.client.Put(ctx, path, nil, &wrapper); err != nil {
+	var mac IPMAC
+	if err := i.client.Put(ctx, path, nil, &mac); err != nil {
 		return nil, err
 	}
-	return &wrapper.MAC, nil
+	return &mac, nil
 }
 
 // DeleteMAC removes the separate MAC address from an IP.

@@ -4,11 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 )
 
 // StorageBoxService handles storage box API operations.
@@ -126,22 +123,6 @@ type StorageBoxSubAccountInput struct {
 	Password *string
 }
 
-type storageBoxWrapper struct {
-	StorageBox StorageBox `json:"storagebox"`
-}
-
-type storageBoxSnapshotWrapper struct {
-	Snapshot StorageBoxSnapshot `json:"snapshot"`
-}
-
-type storageBoxSnapshotPlanWrapper struct {
-	SnapshotPlan StorageBoxSnapshotPlan `json:"snapshotplan"`
-}
-
-type storageBoxSubAccountCreatedWrapper struct {
-	SubAccount StorageBoxSubAccountCreated `json:"subaccount"`
-}
-
 type storageBoxPasswordResponse struct {
 	Password string `json:"password"`
 }
@@ -153,7 +134,7 @@ type storageBoxPasswordResponse struct {
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-storagebox
 func (s *StorageBoxService) List(ctx context.Context) ([]StorageBox, error) {
 	var boxes []StorageBox
-	if err := s.client.GetWrappedList(ctx, "/storagebox", "storagebox", &boxes); err != nil {
+	if err := s.client.Get(ctx, "/storagebox", &boxes); err != nil {
 		return nil, err
 	}
 	return boxes, nil
@@ -166,11 +147,11 @@ func (s *StorageBoxService) List(ctx context.Context) ([]StorageBox, error) {
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-storagebox-storagebox-id
 func (s *StorageBoxService) Get(ctx context.Context, storageBoxID int) (*StorageBox, error) {
 	path := fmt.Sprintf("/storagebox/%d", storageBoxID)
-	var w storageBoxWrapper
-	if err := s.client.Get(ctx, path, &w); err != nil {
+	var box StorageBox
+	if err := s.client.Get(ctx, path, &box); err != nil {
 		return nil, err
 	}
-	return &w.StorageBox, nil
+	return &box, nil
 }
 
 // Update modifies storage box settings. Only fields set on the input are
@@ -201,11 +182,11 @@ func (s *StorageBoxService) Update(ctx context.Context, storageBoxID int, in Sto
 		data.Set("zfs", strconv.FormatBool(*in.ZFS))
 	}
 
-	var w storageBoxWrapper
-	if err := s.client.Post(ctx, path, data, &w); err != nil {
+	var box StorageBox
+	if err := s.client.Post(ctx, path, data, &box); err != nil {
 		return nil, err
 	}
-	return &w.StorageBox, nil
+	return &box, nil
 }
 
 // ResetPassword resets the storage box account password. If newPassword is
@@ -237,7 +218,7 @@ func (s *StorageBoxService) ResetPassword(ctx context.Context, storageBoxID int,
 func (s *StorageBoxService) ListSnapshots(ctx context.Context, storageBoxID int) ([]StorageBoxSnapshot, error) {
 	path := fmt.Sprintf("/storagebox/%d/snapshot", storageBoxID)
 	var snapshots []StorageBoxSnapshot
-	if err := s.client.GetWrappedList(ctx, path, "snapshot", &snapshots); err != nil {
+	if err := s.client.Get(ctx, path, &snapshots); err != nil {
 		return nil, err
 	}
 	return snapshots, nil
@@ -250,11 +231,11 @@ func (s *StorageBoxService) ListSnapshots(ctx context.Context, storageBoxID int)
 // See: https://robot.hetzner.com/doc/webservice/en.html#post-storagebox-storagebox-id-snapshot
 func (s *StorageBoxService) CreateSnapshot(ctx context.Context, storageBoxID int) (*StorageBoxSnapshot, error) {
 	path := fmt.Sprintf("/storagebox/%d/snapshot", storageBoxID)
-	var w storageBoxSnapshotWrapper
-	if err := s.client.Post(ctx, path, nil, &w); err != nil {
+	var snap StorageBoxSnapshot
+	if err := s.client.Post(ctx, path, nil, &snap); err != nil {
 		return nil, err
 	}
-	return &w.Snapshot, nil
+	return &snap, nil
 }
 
 // DeleteSnapshot removes a snapshot.
@@ -300,7 +281,7 @@ func (s *StorageBoxService) SetSnapshotComment(ctx context.Context, storageBoxID
 func (s *StorageBoxService) GetSnapshotPlan(ctx context.Context, storageBoxID int) (*StorageBoxSnapshotPlan, error) {
 	path := fmt.Sprintf("/storagebox/%d/snapshotplan", storageBoxID)
 	var plans []StorageBoxSnapshotPlan
-	if err := s.client.GetWrappedList(ctx, path, "snapshotplan", &plans); err != nil {
+	if err := s.client.Get(ctx, path, &plans); err != nil {
 		return nil, err
 	}
 	if len(plans) == 0 {
@@ -337,62 +318,34 @@ func (s *StorageBoxService) SetSnapshotPlan(ctx context.Context, storageBoxID in
 	}
 	data.Set("max_snapshots", strconv.Itoa(plan.MaxSnapshots))
 
-	// The doc shows the response as a single-element array of
-	// {"snapshotplan": {...}}; some Hetzner endpoints return the bare wrapped
-	// object on POST, so we accept both shapes.
-	body, err := s.postRaw(ctx, path, data)
-	if err != nil {
+	// The Robot endpoint inconsistently returns either a single-element
+	// array `[{"snapshotplan":{...}}]` or the bare wrapped object
+	// `{"snapshotplan":{...}}`. The auto-unwrap strips the wrapper in both
+	// shapes, leaving us with either an array or a single object; decode
+	// into an any first and inspect.
+	var raw any
+	if err := s.client.Post(ctx, path, data, &raw); err != nil {
 		return nil, err
 	}
-	if len(body) > 0 && body[0] == '[' {
-		var wrappers []map[string]json.RawMessage
-		if err := json.Unmarshal(body, &wrappers); err != nil {
-			return nil, NewParseError("failed to parse snapshotplan response", err)
-		}
-		if len(wrappers) == 0 {
-			return nil, NewAPIError(ErrUnknown, "empty snapshotplan response")
-		}
-		raw, ok := wrappers[0]["snapshotplan"]
-		if !ok {
-			return nil, NewParseError("snapshotplan wrapper missing", nil)
-		}
-		var p StorageBoxSnapshotPlan
-		if err := json.Unmarshal(raw, &p); err != nil {
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return nil, NewParseError("failed to re-encode snapshotplan response", err)
+	}
+	if len(encoded) > 0 && encoded[0] == '[' {
+		var plans []StorageBoxSnapshotPlan
+		if err := json.Unmarshal(encoded, &plans); err != nil {
 			return nil, NewParseError("failed to unmarshal snapshotplan", err)
 		}
-		return &p, nil
+		if len(plans) == 0 {
+			return nil, NewAPIError(ErrUnknown, "empty snapshotplan response")
+		}
+		return &plans[0], nil
 	}
-	var w storageBoxSnapshotPlanWrapper
-	if err := json.Unmarshal(body, &w); err != nil {
+	var p StorageBoxSnapshotPlan
+	if err := json.Unmarshal(encoded, &p); err != nil {
 		return nil, NewParseError("failed to unmarshal snapshotplan", err)
 	}
-	return &w.SnapshotPlan, nil
-}
-
-// postRaw is a thin POST helper that returns the raw response body (after
-// HTTP error handling) so the caller can decode array-or-object responses.
-func (s *StorageBoxService) postRaw(ctx context.Context, path string, data url.Values) ([]byte, error) {
-	var body io.Reader
-	if data != nil {
-		body = strings.NewReader(data.Encode())
-	}
-	resp, err := s.client.doRequest(ctx, http.MethodPost, path, body)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, NewNetworkError("failed to read response body", err)
-	}
-	if resp.StatusCode >= 400 {
-		var apiErr APIErrorResponse
-		if err := json.Unmarshal(raw, &apiErr); err != nil {
-			return nil, NewAPIError(ErrUnknown, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(raw)))
-		}
-		return nil, NewAPIError(apiErr.Error.Code, apiErr.Error.Message)
-	}
-	return raw, nil
+	return &p, nil
 }
 
 // ListSubAccounts returns all sub-accounts for a storage box.
@@ -403,7 +356,7 @@ func (s *StorageBoxService) postRaw(ctx context.Context, path string, data url.V
 func (s *StorageBoxService) ListSubAccounts(ctx context.Context, storageBoxID int) ([]StorageBoxSubAccount, error) {
 	path := fmt.Sprintf("/storagebox/%d/subaccount", storageBoxID)
 	var subs []StorageBoxSubAccount
-	if err := s.client.GetWrappedList(ctx, path, "subaccount", &subs); err != nil {
+	if err := s.client.Get(ctx, path, &subs); err != nil {
 		return nil, err
 	}
 	return subs, nil
@@ -419,11 +372,11 @@ func (s *StorageBoxService) CreateSubAccount(ctx context.Context, storageBoxID i
 	path := fmt.Sprintf("/storagebox/%d/subaccount", storageBoxID)
 	data := subAccountForm(in)
 
-	var w storageBoxSubAccountCreatedWrapper
-	if err := s.client.Post(ctx, path, data, &w); err != nil {
+	var sub StorageBoxSubAccountCreated
+	if err := s.client.Post(ctx, path, data, &sub); err != nil {
 		return nil, err
 	}
-	return &w.SubAccount, nil
+	return &sub, nil
 }
 
 // UpdateSubAccount modifies a sub-account.

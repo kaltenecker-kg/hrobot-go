@@ -208,145 +208,68 @@ func retryAfter(h http.Header) time.Duration {
 	return 0
 }
 
-// responseWrapper unwraps Hetzner's `{"<resource>": ...}` envelopes for
-// callers that pass a raw value (rather than their own wrapper struct) to
-// client.Get/Post/Put. Each new endpoint either adds its key here or — the
-// preferred newer pattern — defines a private wrapper struct in its own
-// service file (see subnet.go and storagebox.go for examples).
+// unwrapResponse strips Hetzner's `{"<resource>": ...}` envelope from a
+// response body. The Robot API consistently wraps single-resource responses
+// in an object with one key (e.g. `{"server": {...}}`) and list responses
+// in an array of those wrappers (e.g. `[{"server": {...}}, ...]`). This
+// helper auto-detects both shapes and yields the inner payload.
 //
-// CAUTION: a JSON key listed here will be silently extracted from any
-// response body, so do not introduce a wrapper key whose name collides with
-// a real top-level field used by an unwrapped endpoint.
-type responseWrapper struct {
-	Server                  json.RawMessage `json:"server,omitempty"`
-	Servers                 json.RawMessage `json:"servers,omitempty"`
-	Firewall                json.RawMessage `json:"firewall,omitempty"`
-	IP                      json.RawMessage `json:"ip,omitempty"`
-	Reset                   json.RawMessage `json:"reset,omitempty"`
-	Boot                    json.RawMessage `json:"boot,omitempty"`
-	Rescue                  json.RawMessage `json:"rescue,omitempty"`
-	Key                     json.RawMessage `json:"key,omitempty"`
-	VSwitch                 json.RawMessage `json:"vswitch,omitempty"`
-	RDNS                    json.RawMessage `json:"rdns,omitempty"`
-	Failover                json.RawMessage `json:"failover,omitempty"`
-	Traffic                 json.RawMessage `json:"traffic,omitempty"`
-	ServerMarketProduct     json.RawMessage `json:"server_market_product,omitempty"`
-	ServerMarketTransaction json.RawMessage `json:"server_market_transaction,omitempty"`
-	ServerAddonTransaction  json.RawMessage `json:"server_addon_transaction,omitempty"`
-	ServerAddonProduct      json.RawMessage `json:"server_addon_product,omitempty"`
-	Transaction             json.RawMessage `json:"transaction,omitempty"`
-}
-
-// unwrapArrayResponse handles arrays where each item is wrapped in an object
-// e.g. [{"server": {...}}, {"server": {...}}].
-func unwrapArrayResponse(data []byte, wrapperKey string) (json.RawMessage, error) {
-	var wrappers []map[string]json.RawMessage
-	if err := json.Unmarshal(data, &wrappers); err != nil {
-		return nil, err
-	}
-
-	result := make([]json.RawMessage, 0, len(wrappers))
-	for _, wrapper := range wrappers {
-		if item, ok := wrapper[wrapperKey]; ok {
-			result = append(result, item)
-		}
-	}
-
-	return json.Marshal(result)
-}
-
-// unwrapResponse extracts the actual data from Hetzner's wrapped response.
+// Special cases:
+//   - Bodies that already have an "id" top-level key are treated as
+//     unwrapped resources and returned as-is.
+//   - Arrays whose elements have differing or multiple keys, or scalar
+//     bodies, are returned unchanged.
 func unwrapResponse(data []byte) (json.RawMessage, error) {
-	if len(data) > 0 && data[0] == '[' {
-		// Try to unwrap array elements that might be wrapped in objects
-		// e.g., [{"vswitch": {...}}] -> {...}
-		var arrayOfWrappers []responseWrapper
-		if err := json.Unmarshal(data, &arrayOfWrappers); err == nil && len(arrayOfWrappers) > 0 {
-			wrapper := arrayOfWrappers[0]
-			if len(wrapper.VSwitch) > 0 {
-				return wrapper.VSwitch, nil
-			}
-			if len(wrapper.Server) > 0 {
-				return wrapper.Server, nil
-			}
-			if len(wrapper.Firewall) > 0 {
-				return wrapper.Firewall, nil
-			}
-			if len(wrapper.Key) > 0 {
-				return wrapper.Key, nil
-			}
-			if len(wrapper.Failover) > 0 {
-				return wrapper.Failover, nil
-			}
-		}
+	if len(data) == 0 {
 		return data, nil
 	}
-
-	// If the JSON has an "id" key at the top level, treat as already unwrapped.
-	var topLevelKeys map[string]json.RawMessage
-	if err := json.Unmarshal(data, &topLevelKeys); err == nil {
-		if _, hasID := topLevelKeys["id"]; hasID {
+	switch data[0] {
+	case '[':
+		var arr []map[string]json.RawMessage
+		// Not an array of objects (e.g. array of scalars) → leave as-is.
+		_ = json.Unmarshal(data, &arr)
+		if len(arr) == 0 {
 			return data, nil
 		}
+		var commonKey string
+		for _, item := range arr {
+			if len(item) != 1 {
+				return data, nil
+			}
+			for k, v := range item {
+				if len(v) == 0 || (v[0] != '{' && v[0] != '[') {
+					// Single-key element with a scalar value isn't a wrapper.
+					return data, nil
+				}
+				if commonKey == "" {
+					commonKey = k
+				} else if k != commonKey {
+					return data, nil
+				}
+			}
+		}
+		out := make([]json.RawMessage, 0, len(arr))
+		for _, item := range arr {
+			out = append(out, item[commonKey])
+		}
+		return json.Marshal(out)
+	case '{':
+		var top map[string]json.RawMessage
+		if err := json.Unmarshal(data, &top); err != nil {
+			return data, err
+		}
+		if _, hasID := top["id"]; hasID {
+			return data, nil
+		}
+		if len(top) != 1 {
+			return data, nil
+		}
+		for _, v := range top {
+			if len(v) > 0 && (v[0] == '{' || v[0] == '[') {
+				return v, nil
+			}
+		}
 	}
-
-	var wrapper responseWrapper
-	if err := json.Unmarshal(data, &wrapper); err != nil {
-		return data, err
-	}
-
-	if len(wrapper.Server) > 0 {
-		return wrapper.Server, nil
-	}
-	if len(wrapper.Servers) > 0 {
-		return wrapper.Servers, nil
-	}
-	if len(wrapper.Firewall) > 0 {
-		return wrapper.Firewall, nil
-	}
-	if len(wrapper.IP) > 0 {
-		return wrapper.IP, nil
-	}
-	if len(wrapper.Reset) > 0 {
-		return wrapper.Reset, nil
-	}
-	if len(wrapper.Boot) > 0 {
-		return wrapper.Boot, nil
-	}
-	if len(wrapper.Rescue) > 0 {
-		return wrapper.Rescue, nil
-	}
-	if len(wrapper.Key) > 0 {
-		return wrapper.Key, nil
-	}
-	if len(wrapper.VSwitch) > 0 {
-		return wrapper.VSwitch, nil
-	}
-	if len(wrapper.RDNS) > 0 {
-		return wrapper.RDNS, nil
-	}
-	if len(wrapper.Failover) > 0 {
-		return wrapper.Failover, nil
-	}
-	if len(wrapper.Traffic) > 0 {
-		return wrapper.Traffic, nil
-	}
-	if len(wrapper.ServerMarketProduct) > 0 {
-		return wrapper.ServerMarketProduct, nil
-	}
-	if len(wrapper.ServerMarketTransaction) > 0 {
-		return wrapper.ServerMarketTransaction, nil
-	}
-	if len(wrapper.ServerAddonTransaction) > 0 {
-		return wrapper.ServerAddonTransaction, nil
-	}
-	if len(wrapper.ServerAddonProduct) > 0 {
-		return wrapper.ServerAddonProduct, nil
-	}
-	if len(wrapper.Transaction) > 0 {
-		return wrapper.Transaction, nil
-	}
-
 	return data, nil
 }
 
@@ -589,36 +512,14 @@ func (c *Client) DeleteWithBody(ctx context.Context, path string, data url.Value
 	return c.handleResponse(resp, v)
 }
 
-// GetWrappedList performs a GET request for array responses where each item is wrapped
-// e.g. [{"server": {...}}, {"server": {...}}].
-func (c *Client) GetWrappedList(ctx context.Context, path string, wrapperKey string, v any) error {
-	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return NewNetworkError("failed to read response body", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		return errorFromResponse(resp.StatusCode, body)
-	}
-
-	unwrapped, err := unwrapArrayResponse(body, wrapperKey)
-	if err != nil {
-		return NewParseError("failed to unwrap array response", err)
-	}
-
-	if v != nil {
-		if err := json.Unmarshal(unwrapped, v); err != nil {
-			return NewParseError("failed to unmarshal response", err)
-		}
-	}
-
-	return nil
+// GetWrappedList performs a GET for an array response whose elements are
+// wrapped, e.g. `[{"server": {...}}, ...]`.
+//
+// Deprecated: callers can now pass a plain slice to Get; the wrapper key is
+// auto-detected. This method is retained for source compatibility and
+// ignores wrapperKey.
+func (c *Client) GetWrappedList(ctx context.Context, path string, _ string, v any) error {
+	return c.Get(ctx, path, v)
 }
 
 // PostJSON performs a POST request with JSON body.

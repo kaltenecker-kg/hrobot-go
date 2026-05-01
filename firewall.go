@@ -189,11 +189,6 @@ type FirewallTemplate struct {
 	Rules        FirewallRules `json:"rules"`
 }
 
-// FirewallTemplateWrapper wraps the template in the API response.
-type FirewallTemplateWrapper struct {
-	Template FirewallTemplate `json:"firewall_template"`
-}
-
 // TemplateConfig is used for creating/updating templates.
 type TemplateConfig struct {
 	Name         string
@@ -206,8 +201,7 @@ type TemplateConfig struct {
 // ListTemplates retrieves all firewall templates.
 func (f *FirewallService) ListTemplates(ctx context.Context) ([]FirewallTemplate, error) {
 	var templates []FirewallTemplate
-	err := f.client.Get(ctx, "/firewall/template", &templates)
-	if err != nil {
+	if err := f.client.Get(ctx, "/firewall/template", &templates); err != nil {
 		return nil, err
 	}
 	return templates, nil
@@ -215,24 +209,23 @@ func (f *FirewallService) ListTemplates(ctx context.Context) ([]FirewallTemplate
 
 // GetTemplate retrieves a firewall template.
 func (f *FirewallService) GetTemplate(ctx context.Context, templateID string) (*FirewallTemplate, error) {
-	var wrapper FirewallTemplateWrapper
+	var tmpl FirewallTemplate
 	path := fmt.Sprintf("/firewall/template/%s", templateID)
-	err := f.client.Get(ctx, path, &wrapper)
-	if err != nil {
+	if err := f.client.Get(ctx, path, &tmpl); err != nil {
 		return nil, err
 	}
-	return &wrapper.Template, nil
+	return &tmpl, nil
 }
 
 // CreateTemplate creates a new firewall template.
 func (f *FirewallService) CreateTemplate(ctx context.Context, config TemplateConfig) (*FirewallTemplate, error) {
 	formData := f.encodeRules(config.Rules, templateExtras(config))
 
-	var wrapper FirewallTemplateWrapper
-	if err := f.client.PostRaw(ctx, "/firewall/template", formData, &wrapper); err != nil {
+	var tmpl FirewallTemplate
+	if err := f.client.PostRaw(ctx, "/firewall/template", formData, &tmpl); err != nil {
 		return nil, err
 	}
-	return &wrapper.Template, nil
+	return &tmpl, nil
 }
 
 // UpdateTemplate updates an existing firewall template.
@@ -241,11 +234,11 @@ func (f *FirewallService) UpdateTemplate(ctx context.Context, templateID string,
 
 	formData := f.encodeRules(config.Rules, templateExtras(config))
 
-	var wrapper FirewallTemplateWrapper
-	if err := f.client.PostRaw(ctx, path, formData, &wrapper); err != nil {
+	var tmpl FirewallTemplate
+	if err := f.client.PostRaw(ctx, path, formData, &tmpl); err != nil {
 		return nil, err
 	}
-	return &wrapper.Template, nil
+	return &tmpl, nil
 }
 
 func templateExtras(config TemplateConfig) map[string]string {
