@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 
 	"github.com/kaltenecker-kg/hrobot-go/internal/urlencode"
 )
@@ -79,44 +80,31 @@ type UpdateConfig struct {
 func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config UpdateConfig) (*FirewallConfig, error) {
 	path := fmt.Sprintf("/firewall/%s", serverID.String())
 
-	// Build the form data with hierarchical rule encoding
-	encoder := urlencode.NewFirewallRuleEncoder()
-
-	// Add input rules
-	for _, rule := range config.Rules.Input {
-		ruleData := f.encodeRule(rule)
-		encoder.AddInputRule(ruleData)
-	}
-
-	// Add output rules
-	for _, rule := range config.Rules.Output {
-		ruleData := f.encodeRule(rule)
-		encoder.AddOutputRule(ruleData)
-	}
-
-	// Add status and whitelist settings
-	additional := url.Values{}
-	additional.Set("status", string(config.Status))
-	if config.WhitelistHOS {
-		additional.Set("whitelist_hos", "true")
-	} else {
-		additional.Set("whitelist_hos", "false")
-	}
-	if config.FilterIPv6 {
-		additional.Set("filter_ipv6", "true")
-	} else {
-		additional.Set("filter_ipv6", "false")
-	}
-
-	formData := encoder.MergeValues(additional)
+	formData := f.encodeRules(config.Rules, map[string]string{
+		"status":        string(config.Status),
+		"whitelist_hos": strconv.FormatBool(config.WhitelistHOS),
+		"filter_ipv6":   strconv.FormatBool(config.FilterIPv6),
+	})
 
 	var result FirewallConfig
-	err := f.client.Post(ctx, path, formData, &result)
-	if err != nil {
+	if err := f.client.PostRaw(ctx, path, formData, &result); err != nil {
 		return nil, err
 	}
-
 	return &result, nil
+}
+
+// encodeRules encodes a FirewallRules pair plus extra fields into a
+// pre-encoded body string. Hetzner requires literal `[`/`]` in the keys, so
+// the result must be passed via PostRaw (not via url.Values).
+func (f *FirewallService) encodeRules(rules FirewallRules, extra map[string]string) string {
+	encoder := urlencode.NewFirewallRuleEncoder()
+	for _, rule := range rules.Input {
+		encoder.AddInputRule(f.encodeRule(rule))
+	}
+	for _, rule := range rules.Output {
+		encoder.AddOutputRule(f.encodeRule(rule))
+	}
+	return encoder.EncodeToString(extra)
 }
 
 // encodeRule converts a FirewallRule to a map for URL encoding.
@@ -237,46 +225,12 @@ func (f *FirewallService) GetTemplate(ctx context.Context, templateID string) (*
 
 // CreateTemplate creates a new firewall template.
 func (f *FirewallService) CreateTemplate(ctx context.Context, config TemplateConfig) (*FirewallTemplate, error) {
-	// Build the form data with hierarchical rule encoding
-	encoder := urlencode.NewFirewallRuleEncoder()
-
-	// Add input rules
-	for _, rule := range config.Rules.Input {
-		ruleData := f.encodeRule(rule)
-		encoder.AddInputRule(ruleData)
-	}
-
-	// Add output rules
-	for _, rule := range config.Rules.Output {
-		ruleData := f.encodeRule(rule)
-		encoder.AddOutputRule(ruleData)
-	}
-
-	// Add name, filter_ipv6, whitelist, and is_default settings
-	additional := map[string]string{
-		"name":          config.Name,
-		"filter_ipv6":   "false",
-		"whitelist_hos": "false",
-		"is_default":    "false",
-	}
-	if config.FilterIPv6 {
-		additional["filter_ipv6"] = "true"
-	}
-	if config.WhitelistHOS {
-		additional["whitelist_hos"] = "true"
-	}
-	if config.IsDefault {
-		additional["is_default"] = "true"
-	}
-
-	formData := encoder.EncodeToString(additional)
+	formData := f.encodeRules(config.Rules, templateExtras(config))
 
 	var wrapper FirewallTemplateWrapper
-	err := f.client.PostRaw(ctx, "/firewall/template", formData, &wrapper)
-	if err != nil {
+	if err := f.client.PostRaw(ctx, "/firewall/template", formData, &wrapper); err != nil {
 		return nil, err
 	}
-
 	return &wrapper.Template, nil
 }
 
@@ -284,47 +238,22 @@ func (f *FirewallService) CreateTemplate(ctx context.Context, config TemplateCon
 func (f *FirewallService) UpdateTemplate(ctx context.Context, templateID string, config TemplateConfig) (*FirewallTemplate, error) {
 	path := fmt.Sprintf("/firewall/template/%s", templateID)
 
-	// Build the form data with hierarchical rule encoding
-	encoder := urlencode.NewFirewallRuleEncoder()
-
-	// Add input rules
-	for _, rule := range config.Rules.Input {
-		ruleData := f.encodeRule(rule)
-		encoder.AddInputRule(ruleData)
-	}
-
-	// Add output rules
-	for _, rule := range config.Rules.Output {
-		ruleData := f.encodeRule(rule)
-		encoder.AddOutputRule(ruleData)
-	}
-
-	// Add name, filter_ipv6, whitelist, and is_default settings
-	additional := map[string]string{
-		"name":          config.Name,
-		"filter_ipv6":   "false",
-		"whitelist_hos": "false",
-		"is_default":    "false",
-	}
-	if config.FilterIPv6 {
-		additional["filter_ipv6"] = "true"
-	}
-	if config.WhitelistHOS {
-		additional["whitelist_hos"] = "true"
-	}
-	if config.IsDefault {
-		additional["is_default"] = "true"
-	}
-
-	formData := encoder.EncodeToString(additional)
+	formData := f.encodeRules(config.Rules, templateExtras(config))
 
 	var wrapper FirewallTemplateWrapper
-	err := f.client.PostRaw(ctx, path, formData, &wrapper)
-	if err != nil {
+	if err := f.client.PostRaw(ctx, path, formData, &wrapper); err != nil {
 		return nil, err
 	}
-
 	return &wrapper.Template, nil
+}
+
+func templateExtras(config TemplateConfig) map[string]string {
+	return map[string]string{
+		"name":          config.Name,
+		"filter_ipv6":   strconv.FormatBool(config.FilterIPv6),
+		"whitelist_hos": strconv.FormatBool(config.WhitelistHOS),
+		"is_default":    strconv.FormatBool(config.IsDefault),
+	}
 }
 
 // DeleteTemplate deletes a firewall template.
