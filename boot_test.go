@@ -18,9 +18,9 @@ func TestBootService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"boot": map[string]interface{}{
-				"rescue": map[string]interface{}{
+		response := map[string]any{
+			"boot": map[string]any{
+				"rescue": map[string]any{
 					"server_ip":      "123.123.123.123",
 					"server_number":  321,
 					"active":         false,
@@ -29,7 +29,7 @@ func TestBootService_Get(t *testing.T) {
 					"authorized_key": []string{},
 					"host_key":       []string{},
 				},
-				"linux": map[string]interface{}{
+				"linux": map[string]any{
 					"server_ip":      "123.123.123.123",
 					"server_number":  321,
 					"dist":           []string{"Ubuntu 22.04", "Debian 12"},
@@ -132,8 +132,8 @@ func TestBootService_ActivateRescue(t *testing.T) {
 				}
 
 				password := "test-password-123"
-				response := map[string]interface{}{
-					"rescue": map[string]interface{}{
+				response := map[string]any{
+					"rescue": map[string]any{
 						"server_ip":      "123.123.123.123",
 						"server_number":  321,
 						"active":         true,
@@ -205,8 +205,8 @@ func TestBootService_GetLastRescue(t *testing.T) {
 		}
 
 		password := "previous-password-456"
-		response := map[string]interface{}{
-			"rescue": map[string]interface{}{
+		response := map[string]any{
+			"rescue": map[string]any{
 				"server_ip":      "123.123.123.123",
 				"server_number":  321,
 				"active":         false,
@@ -365,8 +365,8 @@ func TestBootService_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",
@@ -412,7 +412,7 @@ func TestBootService_ActivateVNC(t *testing.T) {
 		password := "vnc-password"
 		// "vnc" is not a registered response wrapper key, so the fixture
 		// is returned unwrapped and decoded directly into VNCConfig.
-		response := map[string]interface{}{
+		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
 			"active":        true,
@@ -478,7 +478,7 @@ func TestBootService_GetLastLinux(t *testing.T) {
 
 		password := "last-linux-pw"
 		// "linux" is not a registered response wrapper key.
-		response := map[string]interface{}{
+		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
 			"dist":          "Ubuntu 22.04",
@@ -519,7 +519,7 @@ func TestBootService_GetWindows(t *testing.T) {
 		}
 
 		// "windows" is not a registered response wrapper key.
-		response := map[string]interface{}{
+		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
 			"active":        false,
@@ -566,7 +566,7 @@ func TestBootService_ActivateWindows(t *testing.T) {
 
 		password := "windows-pw"
 		// "windows" is not a registered response wrapper key.
-		response := map[string]interface{}{
+		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
 			"active":        true,
@@ -631,8 +631,8 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 		}
 
 		password := "test-password"
-		response := map[string]interface{}{
-			"rescue": map[string]interface{}{
+		response := map[string]any{
+			"rescue": map[string]any{
 				"server_ip":      "123.123.123.123",
 				"server_number":  321,
 				"active":         true,

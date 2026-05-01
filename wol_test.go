@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-func wolFixture() map[string]interface{} {
-	return map[string]interface{}{
-		"wol": map[string]interface{}{
+func wolFixture() map[string]any {
+	return map[string]any{
+		"wol": map[string]any{
 			"server_ip":       "123.123.123.123",
 			"server_ipv6_net": "2a01:4f8:111:4221::",
 			"server_number":   321,

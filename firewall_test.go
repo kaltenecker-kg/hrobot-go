@@ -17,15 +17,15 @@ func TestFirewallService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
 				"whitelist_hos": true,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input": []map[string]interface{}{
+				"rules": map[string]any{
+					"input": []map[string]any{
 						{
 							"name":       "allow ssh",
 							"ip_version": "ipv4",
@@ -34,7 +34,7 @@ func TestFirewallService_Get(t *testing.T) {
 							"dst_port":   "22",
 						},
 					},
-					"output": []map[string]interface{}{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -90,16 +90,16 @@ func TestFirewallService_Activate(t *testing.T) {
 			t.Errorf("expected status 'active', got '%s'", r.FormValue("status"))
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
 				"whitelist_hos": false,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -139,16 +139,16 @@ func TestFirewallService_Disable(t *testing.T) {
 			t.Errorf("expected status 'disabled', got '%s'", r.FormValue("status"))
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "disabled",
 				"whitelist_hos": false,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -206,15 +206,15 @@ func TestFirewallService_Update(t *testing.T) {
 			t.Fatalf("failed to parse form: %v", err)
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
 				"whitelist_hos": true,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input": []map[string]interface{}{
+				"rules": map[string]any{
+					"input": []map[string]any{
 						{
 							"name":       "allow http",
 							"ip_version": "ipv4",
@@ -223,7 +223,7 @@ func TestFirewallService_Update(t *testing.T) {
 							"dst_port":   "80",
 						},
 					},
-					"output": []map[string]interface{}{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -318,16 +318,16 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 				}
 				callCount++
 
-				response := map[string]interface{}{
-					"firewall": map[string]interface{}{
+				response := map[string]any{
+					"firewall": map[string]any{
 						"server_ip":     "123.123.123.123",
 						"server_number": 321,
 						"status":        status,
 						"whitelist_hos": true,
 						"port":          "main",
-						"rules": map[string]interface{}{
-							"input":  []map[string]interface{}{},
-							"output": []map[string]interface{}{},
+						"rules": map[string]any{
+							"input":  []map[string]any{},
+							"output": []map[string]any{},
 						},
 					},
 				}
@@ -355,16 +355,16 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 func TestFirewallService_WaitForFirewallReady_Timeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Always return "in process" status
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "in process",
 				"whitelist_hos": true,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -393,16 +393,16 @@ func TestFirewallService_ListTemplates(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
 				"id":            1,
 				"name":          "default",
 				"filter_ipv6":   false,
 				"whitelist_hos": true,
 				"is_default":    true,
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 			{
@@ -411,9 +411,9 @@ func TestFirewallService_ListTemplates(t *testing.T) {
 				"filter_ipv6":   true,
 				"whitelist_hos": false,
 				"is_default":    false,
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -452,16 +452,16 @@ func TestFirewallService_GetTemplate(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"firewall_template": map[string]interface{}{
+		response := map[string]any{
+			"firewall_template": map[string]any{
 				"id":            1,
 				"name":          "default",
 				"filter_ipv6":   false,
 				"whitelist_hos": true,
 				"is_default":    true,
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -513,16 +513,16 @@ func TestFirewallService_CreateTemplate(t *testing.T) {
 			t.Errorf("expected is_default 'false', got '%s'", r.FormValue("is_default"))
 		}
 
-		response := map[string]interface{}{
-			"firewall_template": map[string]interface{}{
+		response := map[string]any{
+			"firewall_template": map[string]any{
 				"id":            7,
 				"name":          "my-template",
 				"filter_ipv6":   true,
 				"whitelist_hos": true,
 				"is_default":    false,
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -583,16 +583,16 @@ func TestFirewallService_UpdateTemplate(t *testing.T) {
 			t.Errorf("expected is_default 'true', got '%s'", r.FormValue("is_default"))
 		}
 
-		response := map[string]interface{}{
-			"firewall_template": map[string]interface{}{
+		response := map[string]any{
+			"firewall_template": map[string]any{
 				"id":            7,
 				"name":          "renamed",
 				"filter_ipv6":   false,
 				"whitelist_hos": false,
 				"is_default":    true,
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -663,15 +663,15 @@ func TestFirewallService_ApplyTemplate(t *testing.T) {
 			t.Errorf("expected template_id '7', got '%s'", r.FormValue("template_id"))
 		}
 
-		response := map[string]interface{}{
+		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
 			"status":        "active",
 			"whitelist_hos": true,
 			"port":          "main",
-			"rules": map[string]interface{}{
-				"input":  []map[string]interface{}{},
-				"output": []map[string]interface{}{},
+			"rules": map[string]any{
+				"input":  []map[string]any{},
+				"output": []map[string]any{},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -731,8 +731,8 @@ func TestFirewallService_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",

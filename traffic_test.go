@@ -43,7 +43,7 @@ func TestTrafficService_Get(t *testing.T) {
 		// therefore return an empty object — it's enough to verify that
 		// the request was issued correctly with the expected form fields
 		// and that the response decode does not error.
-		response := map[string]interface{}{}
+		response := map[string]any{}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
@@ -85,11 +85,11 @@ func TestTrafficService_Get_NoSingleValues(t *testing.T) {
 			t.Errorf("expected ip to be absent, got '%s'", r.FormValue("ip"))
 		}
 
-		response := map[string]interface{}{
+		response := map[string]any{
 			"type": "month",
 			"from": "2024-01-01",
 			"to":   "2024-01-31",
-			"data": map[string]interface{}{},
+			"data": map[string]any{},
 		}
 		_ = json.NewEncoder(w).Encode(response)
 	}))

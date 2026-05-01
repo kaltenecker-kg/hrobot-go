@@ -54,7 +54,7 @@ func TestUnwrapResponse(t *testing.T) {
 			}
 
 			// Compare as normalized JSON to ignore whitespace differences
-			var resultJSON, expectedJSON interface{}
+			var resultJSON, expectedJSON any
 			if err := json.Unmarshal(result, &resultJSON); err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}
@@ -121,7 +121,7 @@ func TestUnwrapArrayResponse(t *testing.T) {
 			}
 
 			// Compare as normalized JSON
-			var resultJSON, expectedJSON interface{}
+			var resultJSON, expectedJSON any
 			if err := json.Unmarshal(result, &resultJSON); err != nil {
 				t.Fatalf("failed to unmarshal result: %v", err)
 			}

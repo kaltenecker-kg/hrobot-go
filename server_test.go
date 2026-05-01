@@ -18,9 +18,9 @@ func TestServerService_List(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
-				"server": map[string]interface{}{
+				"server": map[string]any{
 					"server_ip":     "123.123.123.123",
 					"server_number": 321,
 					"server_name":   "server1",
@@ -31,11 +31,11 @@ func TestServerService_List(t *testing.T) {
 					"cancelled":     false,
 					"paid_until":    "2024-12-31",
 					"ip":            []string{"123.123.123.123"},
-					"subnet":        []map[string]interface{}{},
+					"subnet":        []map[string]any{},
 				},
 			},
 			{
-				"server": map[string]interface{}{
+				"server": map[string]any{
 					"server_ip":     "124.124.124.124",
 					"server_number": 456,
 					"server_name":   "server2",
@@ -46,7 +46,7 @@ func TestServerService_List(t *testing.T) {
 					"cancelled":     false,
 					"paid_until":    "2024-11-30",
 					"ip":            []string{"124.124.124.124"},
-					"subnet":        []map[string]interface{}{},
+					"subnet":        []map[string]any{},
 				},
 			},
 		}
@@ -98,8 +98,8 @@ func TestServerService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"server": map[string]interface{}{
+		response := map[string]any{
+			"server": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"server_name":   "test-server",
@@ -110,7 +110,7 @@ func TestServerService_Get(t *testing.T) {
 				"cancelled":     false,
 				"paid_until":    "2024-12-31",
 				"ip":            []string{"123.123.123.123"},
-				"subnet": []map[string]interface{}{
+				"subnet": []map[string]any{
 					{
 						"ip":   "123.123.123.128",
 						"mask": "255.255.255.192",
@@ -166,8 +166,8 @@ func TestServerService_SetName(t *testing.T) {
 			t.Errorf("expected server_name 'new-name', got '%s'", r.FormValue("server_name"))
 		}
 
-		response := map[string]interface{}{
-			"server": map[string]interface{}{
+		response := map[string]any{
+			"server": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"server_name":   "new-name",
@@ -178,7 +178,7 @@ func TestServerService_SetName(t *testing.T) {
 				"cancelled":     false,
 				"paid_until":    "2024-12-31",
 				"ip":            []string{"123.123.123.123"},
-				"subnet":        []map[string]interface{}{},
+				"subnet":        []map[string]any{},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -270,8 +270,8 @@ func TestServerService_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",

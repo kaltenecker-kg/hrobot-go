@@ -28,53 +28,53 @@ type BootConfig struct {
 
 // RescueConfig represents rescue system configuration.
 type RescueConfig struct {
-	ServerIP       string      `json:"server_ip"`
-	ServerIPv6Net  string      `json:"server_ipv6_net"`
-	ServerNumber   int         `json:"server_number"`
-	Active         bool        `json:"active"`
-	OS             interface{} `json:"os,omitempty"`   // string when active, []string when not
-	Arch           interface{} `json:"arch,omitempty"` // int when active, []int when not
-	AuthorizedKeys []string    `json:"authorized_key,omitempty"`
-	HostKey        []string    `json:"host_key,omitempty"`
-	Password       *string     `json:"password,omitempty"`
+	ServerIP       string   `json:"server_ip"`
+	ServerIPv6Net  string   `json:"server_ipv6_net"`
+	ServerNumber   int      `json:"server_number"`
+	Active         bool     `json:"active"`
+	OS             any      `json:"os,omitempty"`   // string when active, []string when not
+	Arch           any      `json:"arch,omitempty"` // int when active, []int when not
+	AuthorizedKeys []string `json:"authorized_key,omitempty"`
+	HostKey        []string `json:"host_key,omitempty"`
+	Password       *string  `json:"password,omitempty"`
 }
 
 // LinuxConfig represents Linux installation configuration.
 type LinuxConfig struct {
-	ServerIP       string      `json:"server_ip"`
-	ServerIPv6Net  string      `json:"server_ipv6_net"`
-	ServerNumber   int         `json:"server_number"`
-	Dist           interface{} `json:"dist"` // string when active, []string when not
-	Arch           interface{} `json:"arch"` // int when active, []int when not
-	Lang           interface{} `json:"lang"` // string when active, []string when not
-	Active         bool        `json:"active"`
-	Hostname       string      `json:"hostname,omitempty"`
-	Password       *string     `json:"password,omitempty"`
-	AuthorizedKeys []string    `json:"authorized_key,omitempty"`
-	HostKey        []string    `json:"host_key,omitempty"`
+	ServerIP       string   `json:"server_ip"`
+	ServerIPv6Net  string   `json:"server_ipv6_net"`
+	ServerNumber   int      `json:"server_number"`
+	Dist           any      `json:"dist"` // string when active, []string when not
+	Arch           any      `json:"arch"` // int when active, []int when not
+	Lang           any      `json:"lang"` // string when active, []string when not
+	Active         bool     `json:"active"`
+	Hostname       string   `json:"hostname,omitempty"`
+	Password       *string  `json:"password,omitempty"`
+	AuthorizedKeys []string `json:"authorized_key,omitempty"`
+	HostKey        []string `json:"host_key,omitempty"`
 }
 
 // VNCConfig represents VNC configuration.
 type VNCConfig struct {
-	ServerIP      string      `json:"server_ip"`
-	ServerIPv6Net string      `json:"server_ipv6_net"`
-	ServerNumber  int         `json:"server_number"`
-	Active        bool        `json:"active"`
-	Dist          interface{} `json:"dist,omitempty"` // string when active, []string when not
-	Arch          interface{} `json:"arch,omitempty"` // int when active, []int when not
-	Lang          interface{} `json:"lang,omitempty"` // string when active, []string when not
-	Password      *string     `json:"password,omitempty"`
+	ServerIP      string  `json:"server_ip"`
+	ServerIPv6Net string  `json:"server_ipv6_net"`
+	ServerNumber  int     `json:"server_number"`
+	Active        bool    `json:"active"`
+	Dist          any     `json:"dist,omitempty"` // string when active, []string when not
+	Arch          any     `json:"arch,omitempty"` // int when active, []int when not
+	Lang          any     `json:"lang,omitempty"` // string when active, []string when not
+	Password      *string `json:"password,omitempty"`
 }
 
 // WindowsConfig represents Windows installation configuration.
 type WindowsConfig struct {
-	ServerIP      string      `json:"server_ip"`
-	ServerIPv6Net string      `json:"server_ipv6_net"`
-	ServerNumber  int         `json:"server_number"`
-	Active        bool        `json:"active"`
-	OS            interface{} `json:"os,omitempty"`   // string when active, []string when not
-	Lang          interface{} `json:"lang,omitempty"` // string when active, []string when not
-	Password      *string     `json:"password,omitempty"`
+	ServerIP      string  `json:"server_ip"`
+	ServerIPv6Net string  `json:"server_ipv6_net"`
+	ServerNumber  int     `json:"server_number"`
+	Active        bool    `json:"active"`
+	OS            any     `json:"os,omitempty"`   // string when active, []string when not
+	Lang          any     `json:"lang,omitempty"` // string when active, []string when not
+	Password      *string `json:"password,omitempty"`
 }
 
 // PleskConfig represents Plesk installation configuration.

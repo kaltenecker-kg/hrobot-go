@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-func storageBoxFixture() map[string]interface{} {
-	return map[string]interface{}{
-		"storagebox": map[string]interface{}{
+func storageBoxFixture() map[string]any {
+	return map[string]any{
+		"storagebox": map[string]any{
 			"id":                    123456,
 			"login":                 "u12345",
 			"name":                  "Backup Server 1",
@@ -43,7 +43,7 @@ func TestStorageBoxService_List(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]interface{}{storageBoxFixture()})
+		_ = json.NewEncoder(w).Encode([]map[string]any{storageBoxFixture()})
 	}))
 	defer server.Close()
 
@@ -138,7 +138,7 @@ func TestStorageBoxService_ResetPassword_Generated(t *testing.T) {
 		if _, present := r.PostForm["password"]; present {
 			t.Errorf("password should be omitted when empty")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"password": "h1cgLgZYJsyGl0JK"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"password": "h1cgLgZYJsyGl0JK"})
 	}))
 	defer server.Close()
 
@@ -160,7 +160,7 @@ func TestStorageBoxService_ResetPassword_Custom(t *testing.T) {
 		if r.FormValue("password") != "TVUlzspV3YhfSJch" {
 			t.Errorf("password: %q", r.FormValue("password"))
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"password": "TVUlzspV3YhfSJch"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"password": "TVUlzspV3YhfSJch"})
 	}))
 	defer server.Close()
 
@@ -174,9 +174,9 @@ func TestStorageBoxService_ResetPassword_Custom(t *testing.T) {
 	}
 }
 
-func snapshotFixture() map[string]interface{} {
-	return map[string]interface{}{
-		"snapshot": map[string]interface{}{
+func snapshotFixture() map[string]any {
+	return map[string]any{
+		"snapshot": map[string]any{
 			"name":            "2015-12-21T12-40-38",
 			"timestamp":       "2015-12-21T13:40:38+00:00",
 			"size":            400,
@@ -192,7 +192,7 @@ func TestStorageBoxService_ListSnapshots(t *testing.T) {
 		if r.URL.Path != "/storagebox/123456/snapshot" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]interface{}{snapshotFixture()})
+		_ = json.NewEncoder(w).Encode([]map[string]any{snapshotFixture()})
 	}))
 	defer server.Close()
 
@@ -217,8 +217,8 @@ func TestStorageBoxService_CreateSnapshot(t *testing.T) {
 		if r.URL.Path != "/storagebox/123456/snapshot" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"snapshot": map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"snapshot": map[string]any{
 				"name":      "2015-12-21T13-13-03",
 				"timestamp": "2015-12-21T13:13:03+00:00",
 				"size":      400,
@@ -303,9 +303,9 @@ func TestStorageBoxService_SetSnapshotComment(t *testing.T) {
 	}
 }
 
-func snapshotPlanFixture() map[string]interface{} {
-	return map[string]interface{}{
-		"snapshotplan": map[string]interface{}{
+func snapshotPlanFixture() map[string]any {
+	return map[string]any{
+		"snapshotplan": map[string]any{
 			"status":        "enabled",
 			"minute":        5,
 			"hour":          12,
@@ -322,7 +322,7 @@ func TestStorageBoxService_GetSnapshotPlan(t *testing.T) {
 		if r.URL.Path != "/storagebox/123456/snapshotplan" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]interface{}{snapshotPlanFixture()})
+		_ = json.NewEncoder(w).Encode([]map[string]any{snapshotPlanFixture()})
 	}))
 	defer server.Close()
 
@@ -378,7 +378,7 @@ func TestStorageBoxService_SetSnapshotPlan_ArrayResponse(t *testing.T) {
 		if _, present := r.PostForm["month"]; present {
 			t.Errorf("month should be omitted")
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]interface{}{snapshotPlanFixture()})
+		_ = json.NewEncoder(w).Encode([]map[string]any{snapshotPlanFixture()})
 	}))
 	defer server.Close()
 
@@ -420,9 +420,9 @@ func TestStorageBoxService_SetSnapshotPlan_ObjectResponse(t *testing.T) {
 	}
 }
 
-func subAccountFixture() map[string]interface{} {
-	return map[string]interface{}{
-		"subaccount": map[string]interface{}{
+func subAccountFixture() map[string]any {
+	return map[string]any{
+		"subaccount": map[string]any{
 			"username":              "u2342-sub1",
 			"accountid":             "u2342",
 			"server":                "u12345-sub1.your-storagebox.de",
@@ -443,7 +443,7 @@ func TestStorageBoxService_ListSubAccounts(t *testing.T) {
 		if r.URL.Path != "/storagebox/123456/subaccount" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]interface{}{subAccountFixture()})
+		_ = json.NewEncoder(w).Encode([]map[string]any{subAccountFixture()})
 	}))
 	defer server.Close()
 
@@ -499,8 +499,8 @@ func TestStorageBoxService_CreateSubAccount(t *testing.T) {
 		if _, present := r.PostForm["webdav"]; present {
 			t.Errorf("webdav should be omitted")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"subaccount": map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"subaccount": map[string]any{
 				"username":      "u2342-sub1",
 				"password":      "MySecret123!",
 				"accountid":     "u2342",
@@ -602,7 +602,7 @@ func TestStorageBoxService_ResetSubAccountPassword_Generated(t *testing.T) {
 		if _, present := r.PostForm["password"]; present {
 			t.Errorf("password must be omitted when empty")
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"password": "h1cgLgZYJsyGl0JK"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"password": "h1cgLgZYJsyGl0JK"})
 	}))
 	defer server.Close()
 
@@ -624,7 +624,7 @@ func TestStorageBoxService_ResetSubAccountPassword_Custom(t *testing.T) {
 		if r.FormValue("password") != "TVUlzspV3YhfSJch" {
 			t.Errorf("password: %q", r.FormValue("password"))
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{"password": "TVUlzspV3YhfSJch"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"password": "TVUlzspV3YhfSJch"})
 	}))
 	defer server.Close()
 

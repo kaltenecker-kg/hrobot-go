@@ -19,7 +19,7 @@ func TestIPService_List(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
 				"ip":               "123.123.123.123",
 				"server_ip":        "123.123.123.123",
@@ -81,8 +81,8 @@ func TestIPService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"ip": map[string]interface{}{
+		response := map[string]any{
+			"ip": map[string]any{
 				"ip":               "123.123.123.123",
 				"server_ip":        "123.123.123.123",
 				"server_number":    321,
@@ -216,10 +216,10 @@ func TestIPService_GetTraffic(t *testing.T) {
 					t.Errorf("expected query '%s', got '%s'", tt.wantQuery, r.URL.RawQuery)
 				}
 
-				response := map[string]interface{}{
-					"traffic": map[string]interface{}{
+				response := map[string]any{
+					"traffic": map[string]any{
 						"type": tt.trafficType,
-						"data": []map[string]interface{}{
+						"data": []map[string]any{
 							{
 								"timestamp": "2024-01-01 00:00:00",
 								"in":        1000000,
@@ -333,8 +333,8 @@ func TestIPService_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",
@@ -362,8 +362,8 @@ func TestIPService_GetMAC(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"mac": map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"mac": map[string]any{
 				"ip":  "123.123.123.123",
 				"mac": "00:21:85:62:3e:9c",
 			},
@@ -389,8 +389,8 @@ func TestIPService_SetMAC(t *testing.T) {
 		if r.Method != "PUT" {
 			t.Errorf("expected PUT, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"mac": map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"mac": map[string]any{
 				"ip":  "123.123.123.123",
 				"mac": "00:21:85:62:3e:9c",
 			},

@@ -43,15 +43,15 @@ func TestRDNSService_List(t *testing.T) {
 					t.Errorf("expected GET request, got '%s'", r.Method)
 				}
 
-				response := []map[string]interface{}{
+				response := []map[string]any{
 					{
-						"rdns": map[string]interface{}{
+						"rdns": map[string]any{
 							"ip":  "123.123.123.123",
 							"ptr": "server1.example.com",
 						},
 					},
 					{
-						"rdns": map[string]interface{}{
+						"rdns": map[string]any{
 							"ip":  "124.124.124.124",
 							"ptr": "server2.example.com",
 						},
@@ -118,8 +118,8 @@ func TestRDNSService_Get(t *testing.T) {
 					t.Errorf("expected GET request, got '%s'", r.Method)
 				}
 
-				response := map[string]interface{}{
-					"rdns": map[string]interface{}{
+				response := map[string]any{
+					"rdns": map[string]any{
 						"ip":  tt.ip,
 						"ptr": tt.ptr,
 					},
@@ -188,8 +188,8 @@ func TestRDNSService_Create(t *testing.T) {
 					t.Errorf("expected ptr '%s', got '%s'", tt.ptr, r.FormValue("ptr"))
 				}
 
-				response := map[string]interface{}{
-					"rdns": map[string]interface{}{
+				response := map[string]any{
+					"rdns": map[string]any{
 						"ip":  tt.ip,
 						"ptr": tt.ptr,
 					},
@@ -258,8 +258,8 @@ func TestRDNSService_Update(t *testing.T) {
 					t.Errorf("expected ptr '%s', got '%s'", tt.ptr, r.FormValue("ptr"))
 				}
 
-				response := map[string]interface{}{
-					"rdns": map[string]interface{}{
+				response := map[string]any{
+					"rdns": map[string]any{
 						"ip":  tt.ip,
 						"ptr": tt.ptr,
 					},
@@ -389,8 +389,8 @@ func TestRDNSService_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",

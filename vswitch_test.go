@@ -20,7 +20,7 @@ func TestVSwitchService_List(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
 				"id":        12345,
 				"name":      "test-vswitch-1",
@@ -74,20 +74,20 @@ func TestVSwitchService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"vswitch": map[string]interface{}{
+		response := map[string]any{
+			"vswitch": map[string]any{
 				"id":        12345,
 				"name":      "test-vswitch",
 				"vlan":      4000,
 				"cancelled": false,
-				"server": []map[string]interface{}{
+				"server": []map[string]any{
 					{
 						"server_ip":     "123.123.123.123",
 						"server_number": 321,
 						"status":        "ready",
 					},
 				},
-				"subnet": []map[string]interface{}{
+				"subnet": []map[string]any{
 					{
 						"ip":      "10.0.0.0",
 						"mask":    24,
@@ -148,14 +148,14 @@ func TestVSwitchService_Create(t *testing.T) {
 			t.Errorf("expected vlan '4000', got '%s'", r.FormValue("vlan"))
 		}
 
-		response := map[string]interface{}{
-			"vswitch": map[string]interface{}{
+		response := map[string]any{
+			"vswitch": map[string]any{
 				"id":        12345,
 				"name":      "new-vswitch",
 				"vlan":      4000,
 				"cancelled": false,
-				"server":    []map[string]interface{}{},
-				"subnet":    []map[string]interface{}{},
+				"server":    []map[string]any{},
+				"subnet":    []map[string]any{},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -372,8 +372,8 @@ func TestVSwitchService_ErrorHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",
@@ -425,8 +425,8 @@ func TestVSwitchService_IntegerConversion(t *testing.T) {
 						t.Errorf("expected vlan '%d', got '%s'", tt.vlan, vlanStr)
 					}
 
-					response := map[string]interface{}{
-						"vswitch": map[string]interface{}{
+					response := map[string]any{
+						"vswitch": map[string]any{
 							"id":        tt.id,
 							"name":      "test",
 							"vlan":      tt.vlan,

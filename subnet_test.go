@@ -27,9 +27,9 @@ func TestSubnetService_Cancel_DisallowedByPolicy(t *testing.T) {
 	}
 }
 
-func subnetFixture() map[string]interface{} {
-	return map[string]interface{}{
-		"subnet": map[string]interface{}{
+func subnetFixture() map[string]any {
+	return map[string]any{
+		"subnet": map[string]any{
 			"ip":               "2a01:4f8:111:4221::",
 			"mask":             64,
 			"gateway":          "2a01:4f8:111:4221::1",
@@ -53,7 +53,7 @@ func TestSubnetService_List(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]interface{}{subnetFixture()})
+		_ = json.NewEncoder(w).Encode([]map[string]any{subnetFixture()})
 	}))
 	defer server.Close()
 
@@ -110,13 +110,13 @@ func TestSubnetService_Update(t *testing.T) {
 	}
 }
 
-func subnetMACFixture() map[string]interface{} {
-	return map[string]interface{}{
-		"mac": map[string]interface{}{
+func subnetMACFixture() map[string]any {
+	return map[string]any{
+		"mac": map[string]any{
 			"ip":   "2a01:4f8:111:4221::",
 			"mask": "64",
 			"mac":  "00:21:85:62:3e:9c",
-			"possible_mac": map[string]interface{}{
+			"possible_mac": map[string]any{
 				"123.123.123.123": "00:21:85:62:3e:9c",
 				"123.123.123.124": "00:21:85:62:3e:9d",
 			},
@@ -187,8 +187,8 @@ func TestSubnetService_GetCancellation(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"cancellation": map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"cancellation": map[string]any{
 				"ip":                         "2a01:4f8:111:4221::",
 				"mask":                       "64",
 				"server_number":              321,

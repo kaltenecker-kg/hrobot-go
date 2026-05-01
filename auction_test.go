@@ -17,9 +17,9 @@ func TestAuctionService_List(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
-				"product": map[string]interface{}{
+				"product": map[string]any{
 					"id":    42,
 					"name":  "Auction Server #42",
 					"price": "39.00",
@@ -27,7 +27,7 @@ func TestAuctionService_List(t *testing.T) {
 				},
 			},
 			{
-				"product": map[string]interface{}{
+				"product": map[string]any{
 					"id":    99,
 					"name":  "Auction Server #99",
 					"price": "49.00",
@@ -81,7 +81,7 @@ func TestAuctionService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
+		response := map[string]any{
 			"id":    42,
 			"name":  "Auction Server #42",
 			"price": "39.00",
