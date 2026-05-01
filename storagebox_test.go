@@ -402,7 +402,7 @@ func TestStorageBoxService_SetSnapshotPlan_ArrayResponse(t *testing.T) {
 }
 
 func TestStorageBoxService_SetSnapshotPlan_ObjectResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(snapshotPlanFixture())
 	}))
 	defer server.Close()

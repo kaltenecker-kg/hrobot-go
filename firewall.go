@@ -22,6 +22,7 @@ func NewFirewallService(client *Client) *FirewallService {
 // FirewallStatus represents the firewall status.
 type FirewallStatus string
 
+// Firewall status values reported by the API.
 const (
 	FirewallStatusActive   FirewallStatus = "active"
 	FirewallStatusDisabled FirewallStatus = "disabled"

@@ -18,6 +18,7 @@ func NewTrafficService(client *Client) *TrafficService {
 // TrafficType represents the type of traffic data to retrieve.
 type TrafficType string
 
+// Traffic aggregation windows.
 const (
 	TrafficTypeDay   TrafficType = "day"
 	TrafficTypeMonth TrafficType = "month"

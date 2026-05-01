@@ -1,3 +1,7 @@
+// Package urlencode encodes Hetzner Robot firewall payloads. The Robot
+// API expects literal `[` and `]` in keys like `rules[input][0][name]`,
+// so this package builds a query string by hand instead of going through
+// url.Values (which would percent-encode the brackets).
 package urlencode
 
 import (

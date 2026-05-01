@@ -37,6 +37,7 @@ func (e *Error) Unwrap() error {
 // ErrorKind categorizes the error type.
 type ErrorKind string
 
+// ErrorKind values categorize errors returned by this library.
 const (
 	ErrKindAPI     ErrorKind = "API"
 	ErrKindNetwork ErrorKind = "Network"
@@ -107,8 +108,9 @@ func NewPolicyError(operation string) *Error {
 // ErrorCode represents specific API error codes from Hetzner.
 type ErrorCode string
 
+// ErrorCode values mirror the `code` field returned by the Hetzner Robot
+// API on error responses.
 const (
-	// Common errors.
 	ErrUnauthorized            ErrorCode = "UNAUTHORIZED"
 	ErrInvalidInput            ErrorCode = "INVALID_INPUT"
 	ErrInvalidInputServerIP    ErrorCode = "INVALID_INPUT_SERVER_IP"
@@ -120,35 +122,32 @@ const (
 	ErrRateLimitExceeded       ErrorCode = "RATE_LIMIT_EXCEEDED"
 	ErrMaintenanceMode         ErrorCode = "MAINTENANCE_MODE"
 
-	// Firewall errors.
 	ErrFirewallInProcess         ErrorCode = "FIREWALL_IN_PROCESS"
 	ErrFirewallAlreadyActive     ErrorCode = "FIREWALL_ALREADY_ACTIVE"
 	ErrFirewallAlreadyDisabled   ErrorCode = "FIREWALL_ALREADY_DISABLED"
 	ErrFirewallConfigInvalid     ErrorCode = "FIREWALL_CONFIG_INVALID"
 	ErrFirewallRuleLimitExceeded ErrorCode = "FIREWALL_RULE_LIMIT_EXCEEDED"
 
-	// Boot errors.
 	ErrBootConfigNotFound  ErrorCode = "BOOT_CONFIG_NOT_FOUND"
 	ErrBootAlreadyActive   ErrorCode = "BOOT_ALREADY_ACTIVE"
 	ErrRescueNotActive     ErrorCode = "RESCUE_NOT_ACTIVE"
 	ErrRescueAlreadyActive ErrorCode = "RESCUE_ALREADY_ACTIVE"
 
-	// Reset errors.
 	ErrResetNotAvailable ErrorCode = "RESET_NOT_AVAILABLE"
 	ErrResetManualActive ErrorCode = "RESET_MANUAL_ACTIVE"
 
-	// VNC errors.
 	ErrVNCDisabled     ErrorCode = "VNC_DISABLED"
 	ErrVNCNotAvailable ErrorCode = "VNC_NOT_AVAILABLE"
 
-	// Reverse DNS errors.
 	ErrReverseDNSNotFound ErrorCode = "RDNS_NOT_FOUND"
 	ErrReverseDNSInvalid  ErrorCode = "RDNS_INVALID"
 
-	// Client policy.
+	// ErrDisallowedByClientPolicy is returned by stub methods that this
+	// client refuses to call against the live API; see NewPolicyError.
 	ErrDisallowedByClientPolicy ErrorCode = "DISALLOWED_BY_CLIENT_POLICY"
 
-	// Unknown error.
+	// ErrUnknown is set when the error response from the API could not be
+	// parsed or did not include a recognised code.
 	ErrUnknown ErrorCode = "UNKNOWN"
 )
 

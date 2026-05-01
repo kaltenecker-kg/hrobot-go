@@ -12,6 +12,7 @@ import (
 // IPVersion represents the IP protocol version.
 type IPVersion string
 
+// IP protocol versions.
 const (
 	IPv4 IPVersion = "ipv4"
 	IPv6 IPVersion = "ipv6"
@@ -20,6 +21,7 @@ const (
 // Action represents a firewall rule action.
 type Action string
 
+// Firewall rule actions.
 const (
 	ActionAccept  Action = "accept"
 	ActionDiscard Action = "discard"
@@ -28,6 +30,7 @@ const (
 // Protocol represents network protocol.
 type Protocol string
 
+// Network protocols accepted in firewall rules.
 const (
 	ProtocolTCP  Protocol = "tcp"
 	ProtocolUDP  Protocol = "udp"
@@ -59,6 +62,7 @@ type IPAddress struct {
 // ServerStatus represents the status of a server.
 type ServerStatus string
 
+// Server lifecycle states.
 const (
 	ServerStatusReady     ServerStatus = "ready"
 	ServerStatusInProcess ServerStatus = "in process"
@@ -68,6 +72,7 @@ const (
 // ResetType represents different reset types.
 type ResetType string
 
+// Reset operation types.
 const (
 	ResetTypeSoftware  ResetType = "sw"
 	ResetTypeHardware  ResetType = "hw"
@@ -108,6 +113,8 @@ func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes TrafficSize as the string "unlimited" or as a number
+// of bytes.
 func (t TrafficSize) MarshalJSON() ([]byte, error) {
 	if t.Unlimited {
 		return json.Marshal("unlimited")
@@ -115,6 +122,7 @@ func (t TrafficSize) MarshalJSON() ([]byte, error) {
 	return json.Marshal(t.Bytes)
 }
 
+// String returns "unlimited" or a human-readable byte count.
 func (t TrafficSize) String() string {
 	if t.Unlimited {
 		return "unlimited"
@@ -180,6 +188,8 @@ func (bt *BerlinTime) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("unable to parse timestamp: %s", str)
 }
 
+// MarshalJSON formats the timestamp in Europe/Berlin local time using
+// the wire format expected by the Hetzner Robot API.
 func (bt BerlinTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bt.In(berlinLocation).Format("2006-01-02 15:04:05"))
 }
@@ -209,10 +219,13 @@ func (sf *StringFloat) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// MarshalJSON encodes the value as a fixed-precision string, matching the
+// wire format used by the Hetzner Robot API.
 func (sf StringFloat) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fmt.Sprintf("%.4f", float64(sf)))
 }
 
+// Float64 returns the underlying float64 value.
 func (sf StringFloat) Float64() float64 {
 	return float64(sf)
 }

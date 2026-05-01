@@ -15,10 +15,14 @@ import (
 	"time"
 )
 
+// Default client configuration values.
 const (
+	// DefaultBaseURL is the public Hetzner Robot endpoint.
 	DefaultBaseURL = "https://robot-ws.your-server.de"
+	// DefaultTimeout is the per-request HTTP timeout.
 	DefaultTimeout = 30 * time.Second
-	UserAgent      = "hrobot-go/1.0.0"
+	// UserAgent is the default User-Agent header value.
+	UserAgent = "hrobot-go/1.0.0"
 )
 
 // Client is the main API client for Hetzner Robot.
