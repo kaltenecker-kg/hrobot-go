@@ -2,16 +2,10 @@ package hrobot
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 )
-
-// errNotImplemented marks endpoints whose client method exists but has not
-// yet been wired up to the Hetzner API. Used by stub services pending
-// implementation; the policy short-circuit returns NewPolicyError instead.
-var errNotImplemented = errors.New("not implemented")
 
 // SubnetService handles subnet-related API operations.
 type SubnetService struct {
