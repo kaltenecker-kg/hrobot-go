@@ -290,9 +290,9 @@ func (s *StorageBoxService) GetSnapshotPlan(ctx context.Context, storageBoxID in
 	return &plans[0], nil
 }
 
-// SetSnapshotPlan configures the snapshot plan. status is required; the time
-// fields are required when the plan is enabled. Pass nil for fields that
-// should be cleared (the API accepts an empty form value as "unset").
+// SetSnapshotPlan configures the snapshot plan. Status is required; the
+// time fields are required when the plan is enabled. Nil time fields are
+// omitted from the form, which the API treats as "leave unchanged".
 //
 // POST /storagebox/{storagebox-id}/snapshotplan
 //
