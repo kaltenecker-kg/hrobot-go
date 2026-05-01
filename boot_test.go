@@ -386,6 +386,236 @@ func TestBootService_ErrorHandling(t *testing.T) {
 	}
 }
 
+func TestBootService_ActivateVNC(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/vnc" {
+			t.Errorf("expected path '/boot/321/vnc', got '%s'", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("dist") != "Debian 12" {
+			t.Errorf("expected dist 'Debian 12', got '%s'", r.FormValue("dist"))
+		}
+		if r.FormValue("arch") != "64" {
+			t.Errorf("expected arch '64', got '%s'", r.FormValue("arch"))
+		}
+		if r.FormValue("lang") != "en" {
+			t.Errorf("expected lang 'en', got '%s'", r.FormValue("lang"))
+		}
+
+		password := "vnc-password"
+		// "vnc" is not a registered response wrapper key, so the fixture
+		// is returned unwrapped and decoded directly into VNCConfig.
+		response := map[string]interface{}{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"active":        true,
+			"dist":          "Debian 12",
+			"arch":          64,
+			"lang":          "en",
+			"password":      password,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	vnc, err := client.Boot.ActivateVNC(ctx, ServerID(321), "Debian 12", 64, "en")
+	if err != nil {
+		t.Fatalf("Boot.ActivateVNC returned error: %v", err)
+	}
+
+	if !vnc.Active {
+		t.Error("expected VNC to be active")
+	}
+	if vnc.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", vnc.ServerNumber)
+	}
+	if vnc.Password == nil || *vnc.Password != "vnc-password" {
+		t.Errorf("expected password 'vnc-password', got %v", vnc.Password)
+	}
+}
+
+func TestBootService_DeactivateVNC(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/vnc" {
+			t.Errorf("expected path '/boot/321/vnc', got '%s'", r.URL.Path)
+		}
+		if r.Method != "DELETE" {
+			t.Errorf("expected DELETE request, got '%s'", r.Method)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if err := client.Boot.DeactivateVNC(ctx, ServerID(321)); err != nil {
+		t.Fatalf("Boot.DeactivateVNC returned error: %v", err)
+	}
+}
+
+func TestBootService_GetLastLinux(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/linux/last" {
+			t.Errorf("expected path '/boot/321/linux/last', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET request, got '%s'", r.Method)
+		}
+
+		password := "last-linux-pw"
+		// "linux" is not a registered response wrapper key.
+		response := map[string]interface{}{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"dist":          "Ubuntu 22.04",
+			"arch":          64,
+			"lang":          "en",
+			"active":        false,
+			"password":      password,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	linux, err := client.Boot.GetLastLinux(ctx, ServerID(321))
+	if err != nil {
+		t.Fatalf("Boot.GetLastLinux returned error: %v", err)
+	}
+
+	if linux.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", linux.ServerNumber)
+	}
+	if linux.Password == nil || *linux.Password != "last-linux-pw" {
+		t.Errorf("expected password 'last-linux-pw', got %v", linux.Password)
+	}
+}
+
+func TestBootService_GetWindows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/windows" {
+			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET request, got '%s'", r.Method)
+		}
+
+		// "windows" is not a registered response wrapper key.
+		response := map[string]interface{}{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"active":        false,
+			"lang":          []string{"en", "de"},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	windows, err := client.Boot.GetWindows(ctx, ServerID(321))
+	if err != nil {
+		t.Fatalf("Boot.GetWindows returned error: %v", err)
+	}
+
+	if windows.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", windows.ServerNumber)
+	}
+	if windows.Active {
+		t.Error("expected windows to be inactive")
+	}
+}
+
+func TestBootService_ActivateWindows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/windows" {
+			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("lang") != "en" {
+			t.Errorf("expected lang 'en', got '%s'", r.FormValue("lang"))
+		}
+
+		password := "windows-pw"
+		// "windows" is not a registered response wrapper key.
+		response := map[string]interface{}{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"active":        true,
+			"lang":          "en",
+			"password":      password,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	windows, err := client.Boot.ActivateWindows(ctx, ServerID(321), "en")
+	if err != nil {
+		t.Fatalf("Boot.ActivateWindows returned error: %v", err)
+	}
+
+	if !windows.Active {
+		t.Error("expected windows to be active")
+	}
+	if windows.Password == nil || *windows.Password != "windows-pw" {
+		t.Errorf("expected password 'windows-pw', got %v", windows.Password)
+	}
+}
+
+func TestBootService_DeactivateWindows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/windows" {
+			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
+		}
+		if r.Method != "DELETE" {
+			t.Errorf("expected DELETE request, got '%s'", r.Method)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if err := client.Boot.DeactivateWindows(ctx, ServerID(321)); err != nil {
+		t.Fatalf("Boot.DeactivateWindows returned error: %v", err)
+	}
+}
+
 func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
