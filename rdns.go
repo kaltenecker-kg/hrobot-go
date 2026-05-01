@@ -22,11 +22,6 @@ type RDNS struct {
 	PTR string `json:"ptr"`
 }
 
-// RDNSListItem represents a reverse DNS entry in list responses.
-type RDNSListItem struct {
-	RDNS RDNS `json:"rdns"`
-}
-
 // List retrieves all reverse DNS entries.
 // Optionally filter by server IP address.
 //
@@ -36,22 +31,16 @@ type RDNSListItem struct {
 func (r *RDNSService) List(ctx context.Context, serverIP string) ([]RDNS, error) {
 	path := "/rdns"
 
-	// Add optional server_ip filter
 	if serverIP != "" {
-		path += "?server_ip=" + url.QueryEscape(serverIP)
+		params := url.Values{}
+		params.Set("server_ip", serverIP)
+		path += "?" + params.Encode()
 	}
 
-	var result []RDNSListItem
-	if err := r.client.Get(ctx, path, &result); err != nil {
+	var entries []RDNS
+	if err := r.client.Get(ctx, path, &entries); err != nil {
 		return nil, err
 	}
-
-	// Extract RDNS entries from the wrapped response
-	entries := make([]RDNS, 0, len(result))
-	for _, item := range result {
-		entries = append(entries, item.RDNS)
-	}
-
 	return entries, nil
 }
 

@@ -17,8 +17,8 @@ func TestResetService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"reset": map[string]interface{}{
+		response := map[string]any{
+			"reset": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"type":          []string{"sw", "hw", "power"},
@@ -99,8 +99,8 @@ func TestResetService_Execute(t *testing.T) {
 					t.Errorf("expected type '%s', got '%s'", tt.resetType, r.FormValue("type"))
 				}
 
-				response := map[string]interface{}{
-					"reset": map[string]interface{}{
+				response := map[string]any{
+					"reset": map[string]any{
 						"server_ip":     "123.123.123.123",
 						"server_number": 321,
 						"type":          []string{string(tt.resetType)},
@@ -144,8 +144,8 @@ func TestResetService_ExecuteSoftware(t *testing.T) {
 			t.Errorf("expected type 'sw', got '%s'", r.FormValue("type"))
 		}
 
-		response := map[string]interface{}{
-			"reset": map[string]interface{}{
+		response := map[string]any{
+			"reset": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"type":          []string{"sw"},
@@ -187,8 +187,8 @@ func TestResetService_ExecuteHardware(t *testing.T) {
 			t.Errorf("expected type 'hw', got '%s'", r.FormValue("type"))
 		}
 
-		response := map[string]interface{}{
-			"reset": map[string]interface{}{
+		response := map[string]any{
+			"reset": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"type":          []string{"hw"},
@@ -230,8 +230,8 @@ func TestResetService_ExecutePower(t *testing.T) {
 			t.Errorf("expected type 'power', got '%s'", r.FormValue("type"))
 		}
 
-		response := map[string]interface{}{
-			"reset": map[string]interface{}{
+		response := map[string]any{
+			"reset": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"type":          []string{"power"},
@@ -281,10 +281,10 @@ func TestResetService_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",
@@ -310,5 +310,49 @@ func TestResetService_ErrorHandling(t *testing.T) {
 				t.Errorf("expected error, got nil")
 			}
 		})
+	}
+}
+
+func TestResetService_List(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/reset" {
+			t.Errorf("expected path '/reset', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET, got '%s'", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode([]map[string]any{
+			{
+				"reset": map[string]any{
+					"server_ip":       "123.123.123.123",
+					"server_ipv6_net": "2a01:4f8:111:4221::",
+					"server_number":   321,
+					"type":            []string{"sw", "hw", "man"},
+				},
+			},
+			{
+				"reset": map[string]any{
+					"server_ip":     "124.124.124.124",
+					"server_number": 456,
+					"type":          []string{"sw", "hw"},
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	resets, err := client.Reset.List(context.Background())
+	if err != nil {
+		t.Fatalf("Reset.List returned error: %v", err)
+	}
+	if len(resets) != 2 {
+		t.Fatalf("expected 2 resets, got %d", len(resets))
+	}
+	if resets[0].ServerNumber != 321 {
+		t.Errorf("expected server_number 321 on first, got %d", resets[0].ServerNumber)
+	}
+	if len(resets[0].Type) != 3 {
+		t.Errorf("expected 3 reset types on first, got %d", len(resets[0].Type))
 	}
 }

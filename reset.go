@@ -16,6 +16,20 @@ func NewResetService(client *Client) *ResetService {
 	return &ResetService{client: client}
 }
 
+// List returns the reset options for every server, useful for inventorying
+// which reset types are available across the fleet.
+//
+// GET /reset
+//
+// See: https://robot.hetzner.com/doc/webservice/en.html#get-reset
+func (r *ResetService) List(ctx context.Context) ([]Reset, error) {
+	var resets []Reset
+	if err := r.client.GetWrappedList(ctx, "/reset", "reset", &resets); err != nil {
+		return nil, err
+	}
+	return resets, nil
+}
+
 // Get retrieves the reset configuration for a server.
 func (r *ResetService) Get(ctx context.Context, serverID ServerID) (*Reset, error) {
 	var reset Reset

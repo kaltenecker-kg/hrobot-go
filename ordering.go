@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/url"
-	"strconv"
 	"time"
 )
 
@@ -199,52 +198,11 @@ type PurchasedAddon struct {
 // POST /order/server_market/transaction
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#post-order-server-market-transaction
-func (o *OrderingService) PlaceMarketOrder(ctx context.Context, order MarketProductOrder) (*MarketTransaction, error) {
-	path := "/order/server_market/transaction"
-
-	formData := url.Values{}
-	formData.Set("product_id", strconv.FormatUint(uint64(order.ProductID), 10))
-
-	// Authorization
-	if len(order.Auth.Keys) > 0 {
-		for _, key := range order.Auth.Keys {
-			formData.Add("authorized_key[]", key)
-		}
-	} else if order.Auth.Password != "" {
-		formData.Set("password", order.Auth.Password)
-	}
-
-	// Optional fields
-	if order.Distribution != "" {
-		formData.Set("dist", order.Distribution)
-	}
-	if order.Language != "" {
-		formData.Set("lang", order.Language)
-	}
-	if order.ServerName != "" {
-		formData.Set("server_name", order.ServerName)
-	}
-	if order.Comment != "" {
-		formData.Set("comment", order.Comment)
-	}
-
-	// Addons
-	for _, addon := range order.Addons {
-		formData.Add("addon[]", addon)
-	}
-
-	// Test mode
-	if order.Test {
-		formData.Set("test", "true")
-	} else {
-		formData.Set("test", "false")
-	}
-
-	var result MarketTransaction
-	if err := o.client.Post(ctx, path, formData, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+//
+// Disallowed by client policy: this operation is implemented but never
+// invoked. Place market orders via the Hetzner Robot UI.
+func (o *OrderingService) PlaceMarketOrder(_ context.Context, _ MarketProductOrder) (*MarketTransaction, error) {
+	return nil, NewPolicyError("OrderingService.PlaceMarketOrder")
 }
 
 // PlaceProductOrder places an order for a standard product server.
@@ -252,57 +210,11 @@ func (o *OrderingService) PlaceMarketOrder(ctx context.Context, order MarketProd
 // POST /order/server/transaction
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#post-order-server-transaction
-func (o *OrderingService) PlaceProductOrder(ctx context.Context, order ProductOrder) (*MarketTransaction, error) {
-	path := "/order/server/transaction"
-
-	formData := url.Values{}
-	formData.Set("product_id", order.ProductID)
-
-	// Authorization
-	if len(order.Auth.Keys) > 0 {
-		for _, key := range order.Auth.Keys {
-			formData.Add("authorized_key[]", key)
-		}
-	} else if order.Auth.Password != "" {
-		formData.Set("password", order.Auth.Password)
-	}
-
-	// Location (datacenter)
-	if order.Location != "" {
-		formData.Set("location", order.Location)
-	}
-
-	// Optional fields
-	if order.Distribution != "" {
-		formData.Set("dist", order.Distribution)
-	}
-	if order.Language != "" {
-		formData.Set("lang", order.Language)
-	}
-	if order.ServerName != "" {
-		formData.Set("server_name", order.ServerName)
-	}
-	if order.Comment != "" {
-		formData.Set("comment", order.Comment)
-	}
-
-	// Addons
-	for _, addon := range order.Addons {
-		formData.Add("addon[]", addon)
-	}
-
-	// Test mode
-	if order.Test {
-		formData.Set("test", "true")
-	} else {
-		formData.Set("test", "false")
-	}
-
-	var result MarketTransaction
-	if err := o.client.Post(ctx, path, formData, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+//
+// Disallowed by client policy: this operation is implemented but never
+// invoked. Place product orders via the Hetzner Robot UI.
+func (o *OrderingService) PlaceProductOrder(_ context.Context, _ ProductOrder) (*MarketTransaction, error) {
+	return nil, NewPolicyError("OrderingService.PlaceProductOrder")
 }
 
 // PlaceAddonOrder places an order for an addon (e.g., additional IP addresses or subnets).
@@ -310,35 +222,11 @@ func (o *OrderingService) PlaceProductOrder(ctx context.Context, order ProductOr
 // POST /order/server_addon/transaction
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#post-order-server-addon-transaction
-func (o *OrderingService) PlaceAddonOrder(ctx context.Context, order AddonOrder) (*AddonTransaction, error) {
-	path := "/order/server_addon/transaction"
-
-	formData := url.Values{}
-	formData.Set("product_id", order.ProductID)
-	formData.Set("server_number", strconv.Itoa(order.ServerNumber))
-
-	// RIPE reason (required for IP/subnet addons)
-	if order.Reason != "" {
-		formData.Set("reason", order.Reason)
-	}
-
-	// Gateway (optional for subnets)
-	if order.Gateway != "" {
-		formData.Set("gateway", order.Gateway)
-	}
-
-	// Test mode
-	if order.Test {
-		formData.Set("test", "true")
-	} else {
-		formData.Set("test", "false")
-	}
-
-	var result AddonTransaction
-	if err := o.client.Post(ctx, path, formData, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+//
+// Disallowed by client policy: this operation is implemented but never
+// invoked. Place addon orders via the Hetzner Robot UI.
+func (o *OrderingService) PlaceAddonOrder(_ context.Context, _ AddonOrder) (*AddonTransaction, error) {
+	return nil, NewPolicyError("OrderingService.PlaceAddonOrder")
 }
 
 // ListMarketTransactions lists marketplace transaction history from the last 30 days.

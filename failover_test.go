@@ -18,9 +18,9 @@ func TestFailoverService_List(t *testing.T) {
 		}
 
 		activeIP := "123.123.123.124"
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
-				"failover": map[string]interface{}{
+				"failover": map[string]any{
 					"ip":               "123.123.123.100",
 					"netmask":          "255.255.255.255",
 					"server_ip":        "123.123.123.123",
@@ -29,7 +29,7 @@ func TestFailoverService_List(t *testing.T) {
 				},
 			},
 			{
-				"failover": map[string]interface{}{
+				"failover": map[string]any{
 					"ip":               "124.124.124.100",
 					"netmask":          "255.255.255.255",
 					"server_ip":        "124.124.124.124",
@@ -103,8 +103,8 @@ func TestFailoverService_Get(t *testing.T) {
 					t.Errorf("expected GET request, got '%s'", r.Method)
 				}
 
-				response := map[string]interface{}{
-					"failover": map[string]interface{}{
+				response := map[string]any{
+					"failover": map[string]any{
 						"ip":               tt.ip,
 						"netmask":          "255.255.255.255",
 						"server_ip":        "123.123.123.123",
@@ -183,8 +183,8 @@ func TestFailoverService_Update(t *testing.T) {
 					t.Errorf("expected active_server_ip '%s', got '%s'", tt.activeServerIP, r.FormValue("active_server_ip"))
 				}
 
-				response := map[string]interface{}{
-					"failover": map[string]interface{}{
+				response := map[string]any{
+					"failover": map[string]any{
 						"ip":               tt.ip,
 						"netmask":          "255.255.255.255",
 						"server_ip":        "123.123.123.123",
@@ -279,10 +279,10 @@ func TestFailoverService_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",

@@ -1,3 +1,7 @@
+// Package urlencode encodes Hetzner Robot firewall payloads. The Robot
+// API expects literal `[` and `]` in keys like `rules[input][0][name]`,
+// so this package builds a query string by hand instead of going through
+// url.Values (which would percent-encode the brackets).
 package urlencode
 
 import (
@@ -73,21 +77,6 @@ func (e *FirewallRuleEncoder) Encode() string {
 	return EncodeFirewallRules(e.rules)
 }
 
-// EncodeToValues returns url.Values (deprecated, use Encode or EncodeToString).
-func (e *FirewallRuleEncoder) EncodeToValues() url.Values {
-	// This is kept for compatibility but shouldn't be used with Hetzner API
-	values := url.Values{}
-	rulesStr := EncodeFirewallRules(e.rules)
-	// Parse the string back to values (not ideal but maintains compatibility)
-	parsed, _ := url.ParseQuery(rulesStr)
-	for k, v := range parsed {
-		for _, val := range v {
-			values.Add(k, val)
-		}
-	}
-	return values
-}
-
 // EncodeToString returns the complete encoded form string with additional values.
 func (e *FirewallRuleEncoder) EncodeToString(additional map[string]string) string {
 	var parts []string
@@ -105,24 +94,6 @@ func (e *FirewallRuleEncoder) EncodeToString(additional map[string]string) strin
 	}
 
 	return joinParts(parts, "&")
-}
-
-// MergeValues merges additional values into the encoder's output (deprecated).
-func (e *FirewallRuleEncoder) MergeValues(additional url.Values) url.Values {
-	// Convert additional to map
-	additionalMap := make(map[string]string)
-	for key, values := range additional {
-		if len(values) > 0 {
-			additionalMap[key] = values[0]
-		}
-	}
-
-	// Get the string
-	str := e.EncodeToString(additionalMap)
-
-	// Parse back to url.Values
-	values, _ := url.ParseQuery(str)
-	return values
 }
 
 // RuleBuilder helps build individual firewall rules.
@@ -174,13 +145,13 @@ func (r *RuleBuilder) DestIP(ip string) *RuleBuilder {
 }
 
 // SourcePort sets the source port.
-func (r *RuleBuilder) SourcePort(port interface{}) *RuleBuilder {
+func (r *RuleBuilder) SourcePort(port any) *RuleBuilder {
 	r.data["src_port"] = toString(port)
 	return r
 }
 
 // DestPort sets the destination port.
-func (r *RuleBuilder) DestPort(port interface{}) *RuleBuilder {
+func (r *RuleBuilder) DestPort(port any) *RuleBuilder {
 	r.data["dst_port"] = toString(port)
 	return r
 }
@@ -197,7 +168,7 @@ func (r *RuleBuilder) Build() map[string]string {
 }
 
 // toString converts various types to string.
-func toString(v interface{}) string {
+func toString(v any) string {
 	switch val := v.(type) {
 	case string:
 		return val

@@ -6,16 +6,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
+// Default client configuration values.
 const (
+	// DefaultBaseURL is the public Hetzner Robot endpoint.
 	DefaultBaseURL = "https://robot-ws.your-server.de"
+	// DefaultTimeout is the per-request HTTP timeout.
 	DefaultTimeout = 30 * time.Second
-	UserAgent      = "hrobot-go/1.0.0"
+	// UserAgent is the default User-Agent header value.
+	UserAgent = "hrobot-go/1.0.0"
 )
 
 // Client is the main API client for Hetzner Robot.
@@ -25,7 +32,10 @@ type Client struct {
 	username   string
 	password   string
 	userAgent  string
-	debug      bool
+	logger     *slog.Logger
+
+	rateLimitMu sync.RWMutex
+	rateLimit   RateLimit
 
 	// API Services
 	Server     *ServerService
@@ -43,6 +53,17 @@ type Client struct {
 	WOL        *WOLService
 	Subnet     *SubnetService
 	StorageBox *StorageBoxService
+}
+
+// RateLimit captures the rate-limit state reported by the most recent
+// response. Zero values mean the server did not report that field.
+type RateLimit struct {
+	// Limit is the request quota for the current window.
+	Limit int
+	// Remaining is how many requests remain in the current window.
+	Remaining int
+	// Reset is when the current window resets.
+	Reset time.Time
 }
 
 // ClientOption configures the Client.
@@ -69,10 +90,15 @@ func WithUserAgent(ua string) ClientOption {
 	}
 }
 
-// WithDebug enables debug logging of HTTP requests and responses.
-func WithDebug(debug bool) ClientOption {
+// WithLogger attaches a structured logger. The client emits DEBUG-level
+// events for each request, response, and retry, with attributes such as
+// "method", "url", "status", "attempt", and "retry_after". Pass nil to
+// silence (the default).
+//
+// Authorization headers are never logged.
+func WithLogger(logger *slog.Logger) ClientOption {
 	return func(c *Client) {
-		c.debug = debug
+		c.logger = logger
 	}
 }
 
@@ -92,7 +118,10 @@ func NewClient(username, password string, opts ...ClientOption) *Client {
 		opt(c)
 	}
 
-	// Initialize services
+	if c.logger == nil {
+		c.logger = slog.New(slog.DiscardHandler)
+	}
+
 	c.Server = NewServerService(c)
 	c.Firewall = NewFirewallService(c)
 	c.Reset = NewResetService(c)
@@ -117,154 +146,147 @@ func New(username, password string, opts ...ClientOption) *Client {
 	return NewClient(username, password, opts...)
 }
 
-// Response wrapper types to handle Hetzner's response structure.
-type responseWrapper struct {
-	Data json.RawMessage `json:"data,omitempty"`
-	// Hetzner wraps responses in various keys
-	Server                  json.RawMessage `json:"server,omitempty"`
-	Servers                 json.RawMessage `json:"servers,omitempty"`
-	Firewall                json.RawMessage `json:"firewall,omitempty"`
-	IP                      json.RawMessage `json:"ip,omitempty"`
-	Reset                   json.RawMessage `json:"reset,omitempty"`
-	Boot                    json.RawMessage `json:"boot,omitempty"`
-	Rescue                  json.RawMessage `json:"rescue,omitempty"`
-	Key                     json.RawMessage `json:"key,omitempty"`
-	VSwitch                 json.RawMessage `json:"vswitch,omitempty"`
-	RDNS                    json.RawMessage `json:"rdns,omitempty"`
-	Failover                json.RawMessage `json:"failover,omitempty"`
-	Traffic                 json.RawMessage `json:"traffic,omitempty"`
-	ServerMarketProduct     json.RawMessage `json:"server_market_product,omitempty"`
-	ServerMarketTransaction json.RawMessage `json:"server_market_transaction,omitempty"`
-	ServerAddonTransaction  json.RawMessage `json:"server_addon_transaction,omitempty"`
-	ServerAddonProduct      json.RawMessage `json:"server_addon_product,omitempty"`
-	Transaction             json.RawMessage `json:"transaction,omitempty"`
+// LastRateLimit returns the rate-limit state observed on the most recent
+// response. The zero value is returned when no rate-limit headers have been
+// seen yet.
+func (c *Client) LastRateLimit() RateLimit {
+	c.rateLimitMu.RLock()
+	defer c.rateLimitMu.RUnlock()
+	return c.rateLimit
 }
 
-// unwrapArrayResponse handles arrays where each item is wrapped in an object
-// e.g. [{"server": {...}}, {"server": {...}}].
-func unwrapArrayResponse(data []byte, wrapperKey string) (json.RawMessage, error) {
-	var wrappers []map[string]json.RawMessage
-	if err := json.Unmarshal(data, &wrappers); err != nil {
-		return nil, err
-	}
-
-	result := make([]json.RawMessage, 0, len(wrappers))
-	for _, wrapper := range wrappers {
-		if item, ok := wrapper[wrapperKey]; ok {
-			result = append(result, item)
+func (c *Client) updateRateLimit(h http.Header) {
+	rl := RateLimit{}
+	seen := false
+	if v := h.Get("RateLimit-Limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			rl.Limit = n
+			seen = true
 		}
 	}
-
-	return json.Marshal(result)
+	if v := h.Get("RateLimit-Remaining"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			rl.Remaining = n
+			seen = true
+		}
+	}
+	if v := h.Get("RateLimit-Reset"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
+			// Hetzner reports an absolute unix timestamp; some servers send
+			// seconds-until-reset. Heuristic: small values are deltas.
+			if n < 1_000_000_000 {
+				rl.Reset = time.Now().Add(time.Duration(n) * time.Second)
+			} else {
+				rl.Reset = time.Unix(n, 0)
+			}
+			seen = true
+		}
+	}
+	if !seen {
+		return
+	}
+	c.rateLimitMu.Lock()
+	c.rateLimit = rl
+	c.rateLimitMu.Unlock()
 }
 
-// unwrapResponse extracts the actual data from Hetzner's wrapped response.
+// retryAfter returns the duration the server requested via Retry-After,
+// or 0 if no parseable value is present.
+func retryAfter(h http.Header) time.Duration {
+	v := h.Get("Retry-After")
+	if v == "" {
+		return 0
+	}
+	if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+		return time.Duration(n) * time.Second
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		if d := time.Until(t); d > 0 {
+			return d
+		}
+	}
+	return 0
+}
+
+// unwrapResponse strips Hetzner's `{"<resource>": ...}` envelope from a
+// response body. The Robot API consistently wraps single-resource responses
+// in an object with one key (e.g. `{"server": {...}}`) and list responses
+// in an array of those wrappers (e.g. `[{"server": {...}}, ...]`). This
+// helper auto-detects both shapes and yields the inner payload.
+//
+// Special cases:
+//   - Bodies that already have an "id" top-level key are treated as
+//     unwrapped resources and returned as-is.
+//   - Arrays whose elements have differing or multiple keys, or scalar
+//     bodies, are returned unchanged.
 func unwrapResponse(data []byte) (json.RawMessage, error) {
-	// First, check if the response is an array
-	if len(data) > 0 && data[0] == '[' {
-		// Try to unwrap array elements that might be wrapped in objects
-		// e.g., [{"vswitch": {...}}] -> {...}
-		var arrayOfWrappers []responseWrapper
-		if err := json.Unmarshal(data, &arrayOfWrappers); err == nil && len(arrayOfWrappers) > 0 {
-			// Check if the first element has any wrapper keys
-			wrapper := arrayOfWrappers[0]
-			if len(wrapper.VSwitch) > 0 {
-				return wrapper.VSwitch, nil
-			}
-			if len(wrapper.Server) > 0 {
-				return wrapper.Server, nil
-			}
-			if len(wrapper.Firewall) > 0 {
-				return wrapper.Firewall, nil
-			}
-			if len(wrapper.Key) > 0 {
-				return wrapper.Key, nil
-			}
-			if len(wrapper.Failover) > 0 {
-				return wrapper.Failover, nil
-			}
-			// Add other wrapper keys as needed
-		}
-		// If no wrapper keys found or unmarshal failed, return the array as-is
+	if len(data) == 0 {
 		return data, nil
 	}
-
-	// First, check if this is actually a wrapped response by looking for known API wrapper patterns
-	// The Hetzner API typically wraps responses in keys like {"server": {...}}, {"firewall": {...}}, etc.
-	// If the JSON has other keys at the top level (like "id", "name"), it's not wrapped.
-	var topLevelKeys map[string]json.RawMessage
-	if err := json.Unmarshal(data, &topLevelKeys); err == nil {
-		// Check if this looks like an actual resource object (has "id" key) rather than a wrapper
-		if _, hasID := topLevelKeys["id"]; hasID {
-			// This is a resource object, not a wrapped response
+	switch data[0] {
+	case '[':
+		var arr []map[string]json.RawMessage
+		// Not an array of objects (e.g. array of scalars) → leave as-is.
+		_ = json.Unmarshal(data, &arr)
+		if len(arr) == 0 {
 			return data, nil
 		}
+		var commonKey string
+		for _, item := range arr {
+			if len(item) != 1 {
+				return data, nil
+			}
+			for k, v := range item {
+				if len(v) == 0 || (v[0] != '{' && v[0] != '[') {
+					// Single-key element with a scalar value isn't a wrapper.
+					return data, nil
+				}
+				if commonKey == "" {
+					commonKey = k
+				} else if k != commonKey {
+					return data, nil
+				}
+			}
+		}
+		out := make([]json.RawMessage, 0, len(arr))
+		for _, item := range arr {
+			out = append(out, item[commonKey])
+		}
+		return json.Marshal(out)
+	case '{':
+		var top map[string]json.RawMessage
+		if err := json.Unmarshal(data, &top); err != nil {
+			return data, err
+		}
+		if _, hasID := top["id"]; hasID {
+			return data, nil
+		}
+		if len(top) != 1 {
+			return data, nil
+		}
+		for _, v := range top {
+			if len(v) > 0 && (v[0] == '{' || v[0] == '[') {
+				return v, nil
+			}
+		}
 	}
-
-	var wrapper responseWrapper
-	if err := json.Unmarshal(data, &wrapper); err != nil {
-		// If we can't unmarshal as a wrapper, return the original data
-		return data, err
-	}
-
-	// Try each possible wrapper key
-	if len(wrapper.Data) > 0 {
-		return wrapper.Data, nil
-	}
-	if len(wrapper.Server) > 0 {
-		return wrapper.Server, nil
-	}
-	if len(wrapper.Servers) > 0 {
-		return wrapper.Servers, nil
-	}
-	if len(wrapper.Firewall) > 0 {
-		return wrapper.Firewall, nil
-	}
-	if len(wrapper.IP) > 0 {
-		return wrapper.IP, nil
-	}
-	if len(wrapper.Reset) > 0 {
-		return wrapper.Reset, nil
-	}
-	if len(wrapper.Boot) > 0 {
-		return wrapper.Boot, nil
-	}
-	if len(wrapper.Rescue) > 0 {
-		return wrapper.Rescue, nil
-	}
-	if len(wrapper.Key) > 0 {
-		return wrapper.Key, nil
-	}
-	if len(wrapper.VSwitch) > 0 {
-		return wrapper.VSwitch, nil
-	}
-	if len(wrapper.RDNS) > 0 {
-		return wrapper.RDNS, nil
-	}
-	if len(wrapper.Failover) > 0 {
-		return wrapper.Failover, nil
-	}
-	if len(wrapper.Traffic) > 0 {
-		return wrapper.Traffic, nil
-	}
-	if len(wrapper.ServerMarketProduct) > 0 {
-		return wrapper.ServerMarketProduct, nil
-	}
-	if len(wrapper.ServerMarketTransaction) > 0 {
-		return wrapper.ServerMarketTransaction, nil
-	}
-	if len(wrapper.ServerAddonTransaction) > 0 {
-		return wrapper.ServerAddonTransaction, nil
-	}
-	if len(wrapper.ServerAddonProduct) > 0 {
-		return wrapper.ServerAddonProduct, nil
-	}
-	if len(wrapper.Transaction) > 0 {
-		return wrapper.Transaction, nil
-	}
-
-	// No wrapper found, return original data
 	return data, nil
+}
+
+// shouldRetry decides whether a response status warrants another attempt.
+// 401 may flap on Hetzner, but invalid credentials should not loop forever,
+// so it is retried at most once. 429 honors Retry-After. 5xx retries with
+// linear backoff.
+func shouldRetry(statusCode, attempt int) bool {
+	switch {
+	case statusCode == http.StatusUnauthorized:
+		return attempt == 0
+	case statusCode == http.StatusTooManyRequests:
+		return true
+	case statusCode >= 500:
+		return true
+	}
+	return false
 }
 
 // doRequest executes an HTTP request with authentication and automatic retry for transient errors.
@@ -283,17 +305,14 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 
 	const maxRetries = 3
 	var lastErr error
-	var lastResp *http.Response
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		// Check context before each attempt
 		select {
 		case <-ctx.Done():
 			return nil, NewNetworkError("request cancelled", ctx.Err())
 		default:
 		}
 
-		// Create fresh body reader for each attempt
 		var bodyReader io.Reader
 		if len(bodyBytes) > 0 {
 			bodyReader = bytes.NewReader(bodyBytes)
@@ -306,76 +325,83 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 
 		req.SetBasicAuth(c.username, c.password)
 		req.Header.Set("User-Agent", c.userAgent)
-
 		if len(bodyBytes) > 0 {
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		}
 
-		if c.debug {
-			fmt.Printf("\n=== HTTP Request (attempt %d/%d) ===\n", attempt+1, maxRetries)
-			fmt.Printf("%s %s\n", method, reqURL)
-			fmt.Printf("Headers:\n")
-			for k, v := range req.Header {
-				if k != "Authorization" {
-					fmt.Printf("  %s: %s\n", k, v)
-				}
-			}
-			if len(bodyBytes) > 0 {
-				fmt.Printf("Body:\n%s\n", string(bodyBytes))
-			}
-			fmt.Printf("===================\n\n")
-		}
+		c.logger.LogAttrs(ctx, slog.LevelDebug, "hrobot request",
+			slog.String("method", method),
+			slog.String("url", reqURL),
+			slog.Int("attempt", attempt+1),
+			slog.Int("max_retries", maxRetries),
+			slog.Int("body_bytes", len(bodyBytes)),
+		)
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = NewNetworkError("request failed", err)
 			if attempt < maxRetries-1 {
-				time.Sleep(time.Duration(attempt+1) * 500 * time.Millisecond)
+				if err := sleepCtx(ctx, time.Duration(attempt+1)*500*time.Millisecond); err != nil {
+					return nil, err
+				}
 				continue
 			}
 			return nil, lastErr
 		}
 
-		// Retry on transient errors (401 can be flaky with Hetzner API, 5xx are server errors)
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode >= 500 {
-			// Close the response body before retry
+		c.updateRateLimit(resp.Header)
+
+		if shouldRetry(resp.StatusCode, attempt) && attempt < maxRetries-1 {
+			delay := retryAfter(resp.Header)
+			if delay == 0 {
+				delay = time.Duration(attempt+1) * 500 * time.Millisecond
+			}
 			_ = resp.Body.Close()
-			lastResp = resp
-
-			if c.debug {
-				fmt.Printf("got status %d, retrying (%d/%d)...\n", resp.StatusCode, attempt+1, maxRetries)
+			c.logger.LogAttrs(ctx, slog.LevelDebug, "hrobot retry",
+				slog.Int("status", resp.StatusCode),
+				slog.Duration("delay", delay),
+				slog.Int("attempt", attempt+1),
+				slog.Int("max_retries", maxRetries),
+			)
+			if err := sleepCtx(ctx, delay); err != nil {
+				return nil, err
 			}
-
-			if attempt < maxRetries-1 {
-				time.Sleep(time.Duration(attempt+1) * 500 * time.Millisecond)
-				continue
-			}
-			// On last attempt, re-do the request to return the response
-			bodyReader = nil
-			if len(bodyBytes) > 0 {
-				bodyReader = bytes.NewReader(bodyBytes)
-			}
-			req, _ = http.NewRequestWithContext(ctx, method, reqURL, bodyReader)
-			req.SetBasicAuth(c.username, c.password)
-			req.Header.Set("User-Agent", c.userAgent)
-			if len(bodyBytes) > 0 {
-				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			}
-			return c.httpClient.Do(req)
+			continue
 		}
 
 		return resp, nil
 	}
 
-	// Should not reach here, but just in case
-	if lastResp != nil {
-		return lastResp, nil
-	}
 	return nil, lastErr
 }
 
+// sleepCtx sleeps for d, returning early if the context is cancelled.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return NewNetworkError("request cancelled", ctx.Err())
+	case <-t.C:
+		return nil
+	}
+}
+
+// errorFromResponse builds an *Error from a non-2xx response body.
+func errorFromResponse(statusCode int, body []byte) error {
+	var apiErr APIErrorResponse
+	if err := json.Unmarshal(body, &apiErr); err != nil {
+		return newAPIErrorWithStatus(ErrUnknown, fmt.Sprintf("HTTP %d: %s", statusCode, body), statusCode)
+	}
+	status := apiErr.Error.Status
+	if status == 0 {
+		status = statusCode
+	}
+	return newAPIErrorWithStatus(apiErr.Error.Code, apiErr.Error.Message, status)
+}
+
 // handleResponse processes the HTTP response and handles errors.
-func (c *Client) handleResponse(resp *http.Response, v interface{}) error {
+func (c *Client) handleResponse(ctx context.Context, resp *http.Response, v any) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
@@ -383,38 +409,24 @@ func (c *Client) handleResponse(resp *http.Response, v interface{}) error {
 		return NewNetworkError("failed to read response body", err)
 	}
 
-	if c.debug {
-		fmt.Printf("\n=== HTTP Response ===\n")
-		fmt.Printf("Status: %s\n", resp.Status)
-		fmt.Printf("Headers:\n")
-		for k, v := range resp.Header {
-			fmt.Printf("  %s: %s\n", k, v)
-		}
-		fmt.Printf("Body:\n%s\n", string(body))
-		fmt.Printf("====================\n\n")
-	}
+	c.logger.LogAttrs(ctx, slog.LevelDebug, "hrobot response",
+		slog.Int("status", resp.StatusCode),
+		slog.Int("body_bytes", len(body)),
+	)
 
-	// Handle error responses
 	if resp.StatusCode >= 400 {
-		var apiErr APIErrorResponse
-		if err := json.Unmarshal(body, &apiErr); err != nil {
-			return NewAPIError(ErrUnknown, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)))
-		}
-		return NewAPIError(apiErr.Error.Code, apiErr.Error.Message)
+		return errorFromResponse(resp.StatusCode, body)
 	}
 
-	// Handle empty responses (204 No Content)
 	if resp.StatusCode == http.StatusNoContent || len(body) == 0 {
 		return nil
 	}
 
-	// Unwrap the response
 	unwrapped, err := unwrapResponse(body)
 	if err != nil {
 		return NewParseError("failed to unwrap response", err)
 	}
 
-	// Unmarshal into the target type
 	if v != nil {
 		if err := json.Unmarshal(unwrapped, v); err != nil {
 			return NewParseError("failed to unmarshal response", err)
@@ -425,16 +437,16 @@ func (c *Client) handleResponse(resp *http.Response, v interface{}) error {
 }
 
 // Get performs a GET request.
-func (c *Client) Get(ctx context.Context, path string, v interface{}) error {
+func (c *Client) Get(ctx context.Context, path string, v any) error {
 	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // Post performs a POST request with form data.
-func (c *Client) Post(ctx context.Context, path string, data url.Values, v interface{}) error {
+func (c *Client) Post(ctx context.Context, path string, data url.Values, v any) error {
 	var body io.Reader
 	if data != nil {
 		body = strings.NewReader(data.Encode())
@@ -444,12 +456,12 @@ func (c *Client) Post(ctx context.Context, path string, data url.Values, v inter
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // PostRaw performs a POST request with pre-encoded form data string.
 // This is useful when the API expects literal brackets in form keys (not URL-encoded).
-func (c *Client) PostRaw(ctx context.Context, path string, data string, v interface{}) error {
+func (c *Client) PostRaw(ctx context.Context, path string, data string, v any) error {
 	var body io.Reader
 	if data != "" {
 		body = strings.NewReader(data)
@@ -459,11 +471,11 @@ func (c *Client) PostRaw(ctx context.Context, path string, data string, v interf
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // Put performs a PUT request with form data.
-func (c *Client) Put(ctx context.Context, path string, data url.Values, v interface{}) error {
+func (c *Client) Put(ctx context.Context, path string, data url.Values, v any) error {
 	var body io.Reader
 	if data != nil {
 		body = strings.NewReader(data.Encode())
@@ -473,7 +485,7 @@ func (c *Client) Put(ctx context.Context, path string, data url.Values, v interf
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // Delete performs a DELETE request.
@@ -482,12 +494,12 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, nil)
+	return c.handleResponse(ctx, resp, nil)
 }
 
 // DeleteWithBody performs a DELETE request with form data.
 // This is used for APIs that require a DELETE request with a body, like vSwitch cancellation.
-func (c *Client) DeleteWithBody(ctx context.Context, path string, data url.Values, v interface{}) error {
+func (c *Client) DeleteWithBody(ctx context.Context, path string, data url.Values, v any) error {
 	var body io.Reader
 	if data != nil {
 		body = strings.NewReader(data.Encode())
@@ -497,57 +509,28 @@ func (c *Client) DeleteWithBody(ctx context.Context, path string, data url.Value
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
-// GetWrappedList performs a GET request for array responses where each item is wrapped
-// e.g. [{"server": {...}}, {"server": {...}}].
-func (c *Client) GetWrappedList(ctx context.Context, path string, wrapperKey string, v interface{}) error {
-	resp, err := c.doRequest(ctx, http.MethodGet, path, nil)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return NewNetworkError("failed to read response body", err)
-	}
-
-	// Handle error responses
-	if resp.StatusCode >= 400 {
-		var apiErr APIErrorResponse
-		if err := json.Unmarshal(body, &apiErr); err != nil {
-			return NewAPIError(ErrUnknown, fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(body)))
-		}
-		return NewAPIError(apiErr.Error.Code, apiErr.Error.Message)
-	}
-
-	// Unwrap the array
-	unwrapped, err := unwrapArrayResponse(body, wrapperKey)
-	if err != nil {
-		return NewParseError("failed to unwrap array response", err)
-	}
-
-	// Unmarshal into the target type
-	if v != nil {
-		if err := json.Unmarshal(unwrapped, v); err != nil {
-			return NewParseError("failed to unmarshal response", err)
-		}
-	}
-
-	return nil
+// GetWrappedList performs a GET for an array response whose elements are
+// wrapped, e.g. `[{"server": {...}}, ...]`.
+//
+// Deprecated: callers can now pass a plain slice to Get; the wrapper key is
+// auto-detected. This method is retained for source compatibility and
+// ignores wrapperKey.
+func (c *Client) GetWrappedList(ctx context.Context, path string, _ string, v any) error {
+	return c.Get(ctx, path, v)
 }
 
 // PostJSON performs a POST request with JSON body.
-func (c *Client) PostJSON(ctx context.Context, path string, body interface{}, v interface{}) error {
+func (c *Client) PostJSON(ctx context.Context, path string, body any, v any) error {
 	jsonData, err := json.Marshal(body)
 	if err != nil {
 		return NewParseError("failed to marshal request body", err)
 	}
 
-	url := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(jsonData))
+	reqURL := c.baseURL + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(jsonData))
 	if err != nil {
 		return NewNetworkError("failed to create request", err)
 	}
@@ -561,5 +544,6 @@ func (c *Client) PostJSON(ctx context.Context, path string, body interface{}, v 
 		return NewNetworkError("request failed", err)
 	}
 
-	return c.handleResponse(resp, v)
+	c.updateRateLimit(resp.Header)
+	return c.handleResponse(ctx, resp, v)
 }

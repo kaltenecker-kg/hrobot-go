@@ -2,6 +2,7 @@ package hrobot
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -105,7 +106,7 @@ func (a *AuctionService) List(ctx context.Context) ([]AuctionServer, error) {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-order-server-market-product-id
 func (a *AuctionService) Get(ctx context.Context, id uint32) (*AuctionServer, error) {
-	path := "/order/server_market/product/" + string(rune(id))
+	path := "/order/server_market/product/" + strconv.FormatUint(uint64(id), 10)
 	var result AuctionServer
 	if err := a.client.Get(ctx, path, &result); err != nil {
 		return nil, err

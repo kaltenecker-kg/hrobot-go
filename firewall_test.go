@@ -17,15 +17,15 @@ func TestFirewallService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
 				"whitelist_hos": true,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input": []map[string]interface{}{
+				"rules": map[string]any{
+					"input": []map[string]any{
 						{
 							"name":       "allow ssh",
 							"ip_version": "ipv4",
@@ -34,7 +34,7 @@ func TestFirewallService_Get(t *testing.T) {
 							"dst_port":   "22",
 						},
 					},
-					"output": []map[string]interface{}{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -90,16 +90,16 @@ func TestFirewallService_Activate(t *testing.T) {
 			t.Errorf("expected status 'active', got '%s'", r.FormValue("status"))
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
 				"whitelist_hos": false,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -139,16 +139,16 @@ func TestFirewallService_Disable(t *testing.T) {
 			t.Errorf("expected status 'disabled', got '%s'", r.FormValue("status"))
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "disabled",
 				"whitelist_hos": false,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -206,15 +206,15 @@ func TestFirewallService_Update(t *testing.T) {
 			t.Fatalf("failed to parse form: %v", err)
 		}
 
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
 				"whitelist_hos": true,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input": []map[string]interface{}{
+				"rules": map[string]any{
+					"input": []map[string]any{
 						{
 							"name":       "allow http",
 							"ip_version": "ipv4",
@@ -223,7 +223,7 @@ func TestFirewallService_Update(t *testing.T) {
 							"dst_port":   "80",
 						},
 					},
-					"output": []map[string]interface{}{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -318,16 +318,16 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 				}
 				callCount++
 
-				response := map[string]interface{}{
-					"firewall": map[string]interface{}{
+				response := map[string]any{
+					"firewall": map[string]any{
 						"server_ip":     "123.123.123.123",
 						"server_number": 321,
 						"status":        status,
 						"whitelist_hos": true,
 						"port":          "main",
-						"rules": map[string]interface{}{
-							"input":  []map[string]interface{}{},
-							"output": []map[string]interface{}{},
+						"rules": map[string]any{
+							"input":  []map[string]any{},
+							"output": []map[string]any{},
 						},
 					},
 				}
@@ -353,18 +353,18 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 }
 
 func TestFirewallService_WaitForFirewallReady_Timeout(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Always return "in process" status
-		response := map[string]interface{}{
-			"firewall": map[string]interface{}{
+		response := map[string]any{
+			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "in process",
 				"whitelist_hos": true,
 				"port":          "main",
-				"rules": map[string]interface{}{
-					"input":  []map[string]interface{}{},
-					"output": []map[string]interface{}{},
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
 				},
 			},
 		}
@@ -381,6 +381,318 @@ func TestFirewallService_WaitForFirewallReady_Timeout(t *testing.T) {
 	err := client.Firewall.WaitForFirewallReady(ctx, ServerID(321))
 	if err == nil {
 		t.Error("expected timeout error, got nil")
+	}
+}
+
+func TestFirewallService_ListTemplates(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/firewall/template" {
+			t.Errorf("expected path '/firewall/template', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET request, got '%s'", r.Method)
+		}
+
+		response := []map[string]any{
+			{
+				"id":            1,
+				"name":          "default",
+				"filter_ipv6":   false,
+				"whitelist_hos": true,
+				"is_default":    true,
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
+				},
+			},
+			{
+				"id":            2,
+				"name":          "strict",
+				"filter_ipv6":   true,
+				"whitelist_hos": false,
+				"is_default":    false,
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
+				},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	templates, err := client.Firewall.ListTemplates(ctx)
+	if err != nil {
+		t.Fatalf("Firewall.ListTemplates returned error: %v", err)
+	}
+
+	if len(templates) != 2 {
+		t.Fatalf("expected 2 templates, got %d", len(templates))
+	}
+
+	if templates[0].Name != "default" {
+		t.Errorf("expected name 'default', got '%s'", templates[0].Name)
+	}
+	if !templates[0].IsDefault {
+		t.Error("expected first template to be default")
+	}
+}
+
+func TestFirewallService_GetTemplate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/firewall/template/1" {
+			t.Errorf("expected path '/firewall/template/1', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET request, got '%s'", r.Method)
+		}
+
+		response := map[string]any{
+			"firewall_template": map[string]any{
+				"id":            1,
+				"name":          "default",
+				"filter_ipv6":   false,
+				"whitelist_hos": true,
+				"is_default":    true,
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
+				},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	tmpl, err := client.Firewall.GetTemplate(ctx, "1")
+	if err != nil {
+		t.Fatalf("Firewall.GetTemplate returned error: %v", err)
+	}
+
+	if tmpl.ID != 1 {
+		t.Errorf("expected id 1, got %d", tmpl.ID)
+	}
+	if tmpl.Name != "default" {
+		t.Errorf("expected name 'default', got '%s'", tmpl.Name)
+	}
+}
+
+func TestFirewallService_CreateTemplate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/firewall/template" {
+			t.Errorf("expected path '/firewall/template', got '%s'", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("name") != "my-template" {
+			t.Errorf("expected name 'my-template', got '%s'", r.FormValue("name"))
+		}
+		if r.FormValue("filter_ipv6") != "true" {
+			t.Errorf("expected filter_ipv6 'true', got '%s'", r.FormValue("filter_ipv6"))
+		}
+		if r.FormValue("whitelist_hos") != "true" {
+			t.Errorf("expected whitelist_hos 'true', got '%s'", r.FormValue("whitelist_hos"))
+		}
+		if r.FormValue("is_default") != "false" {
+			t.Errorf("expected is_default 'false', got '%s'", r.FormValue("is_default"))
+		}
+
+		response := map[string]any{
+			"firewall_template": map[string]any{
+				"id":            7,
+				"name":          "my-template",
+				"filter_ipv6":   true,
+				"whitelist_hos": true,
+				"is_default":    false,
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
+				},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	tmpl, err := client.Firewall.CreateTemplate(ctx, TemplateConfig{
+		Name:         "my-template",
+		FilterIPv6:   true,
+		WhitelistHOS: true,
+		IsDefault:    false,
+		Rules: FirewallRules{
+			Input:  []FirewallRule{},
+			Output: []FirewallRule{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Firewall.CreateTemplate returned error: %v", err)
+	}
+
+	if tmpl.ID != 7 {
+		t.Errorf("expected id 7, got %d", tmpl.ID)
+	}
+	if tmpl.Name != "my-template" {
+		t.Errorf("expected name 'my-template', got '%s'", tmpl.Name)
+	}
+}
+
+func TestFirewallService_UpdateTemplate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/firewall/template/7" {
+			t.Errorf("expected path '/firewall/template/7', got '%s'", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("name") != "renamed" {
+			t.Errorf("expected name 'renamed', got '%s'", r.FormValue("name"))
+		}
+		if r.FormValue("filter_ipv6") != "false" {
+			t.Errorf("expected filter_ipv6 'false', got '%s'", r.FormValue("filter_ipv6"))
+		}
+		if r.FormValue("whitelist_hos") != "false" {
+			t.Errorf("expected whitelist_hos 'false', got '%s'", r.FormValue("whitelist_hos"))
+		}
+		if r.FormValue("is_default") != "true" {
+			t.Errorf("expected is_default 'true', got '%s'", r.FormValue("is_default"))
+		}
+
+		response := map[string]any{
+			"firewall_template": map[string]any{
+				"id":            7,
+				"name":          "renamed",
+				"filter_ipv6":   false,
+				"whitelist_hos": false,
+				"is_default":    true,
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
+				},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	tmpl, err := client.Firewall.UpdateTemplate(ctx, "7", TemplateConfig{
+		Name:      "renamed",
+		IsDefault: true,
+		Rules: FirewallRules{
+			Input:  []FirewallRule{},
+			Output: []FirewallRule{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Firewall.UpdateTemplate returned error: %v", err)
+	}
+
+	if tmpl.Name != "renamed" {
+		t.Errorf("expected name 'renamed', got '%s'", tmpl.Name)
+	}
+	if !tmpl.IsDefault {
+		t.Error("expected template to be default")
+	}
+}
+
+func TestFirewallService_DeleteTemplate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/firewall/template/7" {
+			t.Errorf("expected path '/firewall/template/7', got '%s'", r.URL.Path)
+		}
+		if r.Method != "DELETE" {
+			t.Errorf("expected DELETE request, got '%s'", r.Method)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if err := client.Firewall.DeleteTemplate(ctx, "7"); err != nil {
+		t.Fatalf("Firewall.DeleteTemplate returned error: %v", err)
+	}
+}
+
+func TestFirewallService_ApplyTemplate(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/firewall/321" {
+			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("template_id") != "7" {
+			t.Errorf("expected template_id '7', got '%s'", r.FormValue("template_id"))
+		}
+
+		response := map[string]any{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"status":        "active",
+			"whitelist_hos": true,
+			"port":          "main",
+			"rules": map[string]any{
+				"input":  []map[string]any{},
+				"output": []map[string]any{},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	config, err := client.Firewall.ApplyTemplate(ctx, ServerID(321), "7")
+	if err != nil {
+		t.Fatalf("Firewall.ApplyTemplate returned error: %v", err)
+	}
+
+	if config.Status != FirewallStatusActive {
+		t.Errorf("expected status 'active', got '%s'", config.Status)
+	}
+	if config.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", config.ServerNumber)
 	}
 }
 
@@ -417,10 +729,10 @@ func TestFirewallService_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",

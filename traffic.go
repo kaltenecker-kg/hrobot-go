@@ -18,6 +18,7 @@ func NewTrafficService(client *Client) *TrafficService {
 // TrafficType represents the type of traffic data to retrieve.
 type TrafficType string
 
+// Traffic aggregation windows.
 const (
 	TrafficTypeDay   TrafficType = "day"
 	TrafficTypeMonth TrafficType = "month"
@@ -37,11 +38,6 @@ type TrafficStats struct {
 	In  float64 `json:"in"`  // Incoming traffic in GB
 	Out float64 `json:"out"` // Outgoing traffic in GB
 	Sum float64 `json:"sum"` // Total traffic in GB
-}
-
-// ServerTrafficResponse represents the API response for traffic data.
-type ServerTrafficResponse struct {
-	Traffic ServerTrafficData `json:"traffic"`
 }
 
 // TrafficGetParams represents parameters for retrieving traffic data.
@@ -73,7 +69,6 @@ func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*Ser
 		formData.Set("single_values", "true")
 	}
 
-	// Try parsing directly as ServerTrafficData (without wrapper)
 	var result ServerTrafficData
 	if err := t.client.Post(ctx, path, formData, &result); err != nil {
 		return nil, err

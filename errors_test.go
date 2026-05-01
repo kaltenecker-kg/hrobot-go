@@ -16,9 +16,11 @@ func TestErrorCreation(t *testing.T) {
 		if err.Kind != ErrKindAPI {
 			t.Errorf("Kind = %s, want %s", err.Kind, ErrKindAPI)
 		}
-		expectedMsg := "[SERVER_NOT_FOUND] server 123 not found"
-		if err.Message != expectedMsg {
-			t.Errorf("Message = %s, want %s", err.Message, expectedMsg)
+		if err.Code != ErrServerNotFound {
+			t.Errorf("Code = %s, want %s", err.Code, ErrServerNotFound)
+		}
+		if err.Message != "server 123 not found" {
+			t.Errorf("Message = %s, want 'server 123 not found'", err.Message)
 		}
 	})
 
@@ -86,9 +88,10 @@ func TestErrorString(t *testing.T) {
 			name: "API error with code",
 			err: &Error{
 				Kind:    ErrKindAPI,
-				Message: "[SERVER_NOT_FOUND] server not found",
+				Code:    ErrServerNotFound,
+				Message: "server not found",
 			},
-			want: "API: [SERVER_NOT_FOUND] server not found",
+			want: "API[SERVER_NOT_FOUND]: server not found",
 		},
 		{
 			name: "Network error with cause",

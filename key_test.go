@@ -18,9 +18,9 @@ func TestKeyService_List(t *testing.T) {
 			t.Errorf("Expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
-				"key": map[string]interface{}{
+				"key": map[string]any{
 					"name":        "test-key-1",
 					"fingerprint": "d7:34:1c:8c:4e:20:e0:1f:07:66:45:d9:97:22:ec:07",
 					"type":        "ED25519",
@@ -30,7 +30,7 @@ func TestKeyService_List(t *testing.T) {
 				},
 			},
 			{
-				"key": map[string]interface{}{
+				"key": map[string]any{
 					"name":        "test-key-2",
 					"fingerprint": "a1:b2:c3:d4:e5:f6:07:08:09:10:11:12:13:14:15:16",
 					"type":        "RSA",
@@ -87,8 +87,8 @@ func TestKeyService_Get(t *testing.T) {
 			t.Errorf("Expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"key": map[string]interface{}{
+		response := map[string]any{
+			"key": map[string]any{
 				"name":        "test-key",
 				"fingerprint": fingerprint,
 				"type":        "ED25519",
@@ -144,8 +144,8 @@ func TestKeyService_Create(t *testing.T) {
 			t.Errorf("Unexpected data value")
 		}
 
-		response := map[string]interface{}{
-			"key": map[string]interface{}{
+		response := map[string]any{
+			"key": map[string]any{
 				"name":        name,
 				"fingerprint": "d7:34:1c:8c:4e:20:e0:1f:07:66:45:d9:97:22:ec:07",
 				"type":        "ED25519",
@@ -198,8 +198,8 @@ func TestKeyService_Rename(t *testing.T) {
 			t.Errorf("Expected name 'renamed-key', got '%s'", name)
 		}
 
-		response := map[string]interface{}{
-			"key": map[string]interface{}{
+		response := map[string]any{
+			"key": map[string]any{
 				"name":        name,
 				"fingerprint": fingerprint,
 				"type":        "ED25519",

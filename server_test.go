@@ -3,6 +3,7 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,9 +18,9 @@ func TestServerService_List(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]interface{}{
+		response := []map[string]any{
 			{
-				"server": map[string]interface{}{
+				"server": map[string]any{
 					"server_ip":     "123.123.123.123",
 					"server_number": 321,
 					"server_name":   "server1",
@@ -30,11 +31,11 @@ func TestServerService_List(t *testing.T) {
 					"cancelled":     false,
 					"paid_until":    "2024-12-31",
 					"ip":            []string{"123.123.123.123"},
-					"subnet":        []map[string]interface{}{},
+					"subnet":        []map[string]any{},
 				},
 			},
 			{
-				"server": map[string]interface{}{
+				"server": map[string]any{
 					"server_ip":     "124.124.124.124",
 					"server_number": 456,
 					"server_name":   "server2",
@@ -45,7 +46,7 @@ func TestServerService_List(t *testing.T) {
 					"cancelled":     false,
 					"paid_until":    "2024-11-30",
 					"ip":            []string{"124.124.124.124"},
-					"subnet":        []map[string]interface{}{},
+					"subnet":        []map[string]any{},
 				},
 			},
 		}
@@ -97,8 +98,8 @@ func TestServerService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"server": map[string]interface{}{
+		response := map[string]any{
+			"server": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"server_name":   "test-server",
@@ -109,7 +110,7 @@ func TestServerService_Get(t *testing.T) {
 				"cancelled":     false,
 				"paid_until":    "2024-12-31",
 				"ip":            []string{"123.123.123.123"},
-				"subnet": []map[string]interface{}{
+				"subnet": []map[string]any{
 					{
 						"ip":   "123.123.123.128",
 						"mask": "255.255.255.192",
@@ -165,8 +166,8 @@ func TestServerService_SetName(t *testing.T) {
 			t.Errorf("expected server_name 'new-name', got '%s'", r.FormValue("server_name"))
 		}
 
-		response := map[string]interface{}{
-			"server": map[string]interface{}{
+		response := map[string]any{
+			"server": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"server_name":   "new-name",
@@ -177,7 +178,7 @@ func TestServerService_SetName(t *testing.T) {
 				"cancelled":     false,
 				"paid_until":    "2024-12-31",
 				"ip":            []string{"123.123.123.123"},
-				"subnet":        []map[string]interface{}{},
+				"subnet":        []map[string]any{},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -199,72 +200,24 @@ func TestServerService_SetName(t *testing.T) {
 	}
 }
 
-func TestServerService_RequestCancellation(t *testing.T) {
-	tests := []struct {
-		name               string
-		cancellation       Cancellation
-		expectedDate       string
-		expectedReason     string
-		expectedReasonSent bool
-	}{
-		{
-			name: "with reason",
-			cancellation: Cancellation{
-				ServerID:           ServerID(321),
-				CancellationDate:   "2024-12-31",
-				CancellationReason: "no longer needed",
-			},
-			expectedDate:       "2024-12-31",
-			expectedReason:     "no longer needed",
-			expectedReasonSent: true,
-		},
-		{
-			name: "without reason",
-			cancellation: Cancellation{
-				ServerID:         ServerID(321),
-				CancellationDate: "2024-12-31",
-			},
-			expectedDate:       "2024-12-31",
-			expectedReasonSent: false,
-		},
+func TestServerService_RequestCancellation_DisallowedByPolicy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("RequestCancellation must not perform an HTTP call; got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+
+	err := client.Server.RequestCancellation(context.Background(), Cancellation{
+		ServerID:         ServerID(321),
+		CancellationDate: "2024-12-31",
+	})
+	if !IsPolicyError(err) {
+		t.Fatalf("expected policy error, got %v", err)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/server/321/cancellation" {
-					t.Errorf("expected path '/server/321/cancellation', got '%s'", r.URL.Path)
-				}
-				if r.Method != "POST" {
-					t.Errorf("expected POST request, got '%s'", r.Method)
-				}
-
-				if err := r.ParseForm(); err != nil {
-					t.Fatalf("failed to parse form: %v", err)
-				}
-
-				if r.FormValue("cancellation_date") != tt.expectedDate {
-					t.Errorf("expected cancellation_date '%s', got '%s'", tt.expectedDate, r.FormValue("cancellation_date"))
-				}
-
-				if tt.expectedReasonSent {
-					if r.FormValue("cancellation_reason") != tt.expectedReason {
-						t.Errorf("expected cancellation_reason '%s', got '%s'", tt.expectedReason, r.FormValue("cancellation_reason"))
-					}
-				}
-
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer server.Close()
-
-			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-			ctx := context.Background()
-
-			err := client.Server.RequestCancellation(ctx, tt.cancellation)
-			if err != nil {
-				t.Fatalf("Server.RequestCancellation returned error: %v", err)
-			}
-		})
+	var e *Error
+	if !errors.As(err, &e) || e.Status != 451 {
+		t.Fatalf("expected status 451, got %v", err)
 	}
 }
 
@@ -315,10 +268,10 @@ func TestServerService_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",
