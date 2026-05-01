@@ -659,3 +659,69 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 		t.Error("expected rescue to be active")
 	}
 }
+
+func TestRescueConfig_Accessors(t *testing.T) {
+	t.Run("inactive returns options", func(t *testing.T) {
+		body := []byte(`{"active":false,"os":["linux","vkvm"],"arch":[64,32]}`)
+		var c RescueConfig
+		if err := json.Unmarshal(body, &c); err != nil {
+			t.Fatal(err)
+		}
+		if got := c.ActiveOS(); got != "" {
+			t.Errorf("ActiveOS = %q, want \"\"", got)
+		}
+		if got := c.AvailableOS(); !equalStringSlice(got, []string{"linux", "vkvm"}) {
+			t.Errorf("AvailableOS = %v", got)
+		}
+		if got := c.ActiveArch(); got != 0 {
+			t.Errorf("ActiveArch = %d, want 0", got)
+		}
+		if got := c.AvailableArchs(); !equalIntSlice(got, []int{64, 32}) {
+			t.Errorf("AvailableArchs = %v", got)
+		}
+	})
+
+	t.Run("active returns scalar", func(t *testing.T) {
+		body := []byte(`{"active":true,"os":"linux","arch":64}`)
+		var c RescueConfig
+		if err := json.Unmarshal(body, &c); err != nil {
+			t.Fatal(err)
+		}
+		if got := c.ActiveOS(); got != "linux" {
+			t.Errorf("ActiveOS = %q, want \"linux\"", got)
+		}
+		if got := c.AvailableOS(); got != nil {
+			t.Errorf("AvailableOS = %v, want nil", got)
+		}
+		if got := c.ActiveArch(); got != 64 {
+			t.Errorf("ActiveArch = %d, want 64", got)
+		}
+		if got := c.AvailableArchs(); got != nil {
+			t.Errorf("AvailableArchs = %v, want nil", got)
+		}
+	})
+}
+
+func equalStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalIntSlice(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

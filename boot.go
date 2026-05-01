@@ -77,6 +77,140 @@ type WindowsConfig struct {
 	Password      *string `json:"password,omitempty"`
 }
 
+// ActiveOS returns the OS chosen for this rescue session, or "" if rescue
+// is not currently active. When inactive, see AvailableOS for the choices
+// the API offers.
+func (c *RescueConfig) ActiveOS() string { return scalarString(c.OS) }
+
+// AvailableOS lists the OS choices the API offers when rescue is not
+// active. Returns nil when rescue is active (use ActiveOS instead).
+func (c *RescueConfig) AvailableOS() []string { return optionStrings(c.OS) }
+
+// ActiveArch returns the architecture chosen for this rescue session, or
+// 0 if rescue is not currently active.
+func (c *RescueConfig) ActiveArch() int { return scalarInt(c.Arch) }
+
+// AvailableArchs lists the architecture choices the API offers when
+// rescue is not active.
+func (c *RescueConfig) AvailableArchs() []int { return optionInts(c.Arch) }
+
+// ActiveDist returns the distribution chosen for this Linux install, or
+// "" if not currently active.
+func (c *LinuxConfig) ActiveDist() string { return scalarString(c.Dist) }
+
+// AvailableDists lists the distributions the API offers when not active.
+func (c *LinuxConfig) AvailableDists() []string { return optionStrings(c.Dist) }
+
+// ActiveArch returns the architecture chosen for this Linux install, or
+// 0 if not currently active.
+func (c *LinuxConfig) ActiveArch() int { return scalarInt(c.Arch) }
+
+// AvailableArchs lists the architecture choices the API offers when not
+// active.
+func (c *LinuxConfig) AvailableArchs() []int { return optionInts(c.Arch) }
+
+// ActiveLang returns the language chosen for this Linux install, or "" if
+// not currently active.
+func (c *LinuxConfig) ActiveLang() string { return scalarString(c.Lang) }
+
+// AvailableLangs lists the language choices the API offers when not
+// active.
+func (c *LinuxConfig) AvailableLangs() []string { return optionStrings(c.Lang) }
+
+// ActiveDist returns the distribution chosen for this VNC session, or ""
+// if not currently active.
+func (c *VNCConfig) ActiveDist() string { return scalarString(c.Dist) }
+
+// AvailableDists lists the distributions the API offers when not active.
+func (c *VNCConfig) AvailableDists() []string { return optionStrings(c.Dist) }
+
+// ActiveArch returns the architecture chosen for this VNC session, or 0
+// if not currently active.
+func (c *VNCConfig) ActiveArch() int { return scalarInt(c.Arch) }
+
+// AvailableArchs lists the architecture choices the API offers when not
+// active.
+func (c *VNCConfig) AvailableArchs() []int { return optionInts(c.Arch) }
+
+// ActiveLang returns the language chosen for this VNC session, or "" if
+// not currently active.
+func (c *VNCConfig) ActiveLang() string { return scalarString(c.Lang) }
+
+// AvailableLangs lists the language choices the API offers when not
+// active.
+func (c *VNCConfig) AvailableLangs() []string { return optionStrings(c.Lang) }
+
+// ActiveOS returns the OS chosen for this Windows install, or "" if not
+// currently active.
+func (c *WindowsConfig) ActiveOS() string { return scalarString(c.OS) }
+
+// AvailableOS lists the OS choices the API offers when not active.
+func (c *WindowsConfig) AvailableOS() []string { return optionStrings(c.OS) }
+
+// ActiveLang returns the language chosen for this Windows install, or ""
+// if not currently active.
+func (c *WindowsConfig) ActiveLang() string { return scalarString(c.Lang) }
+
+// AvailableLangs lists the language choices the API offers when not
+// active.
+func (c *WindowsConfig) AvailableLangs() []string { return optionStrings(c.Lang) }
+
+// scalarString returns v as a string when it holds the active value, or
+// "" otherwise (including when it holds the list of choices).
+func scalarString(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// optionStrings returns v as a slice of strings when it holds the list of
+// choices offered by the API, or nil otherwise.
+func optionStrings(v any) []string {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(arr))
+	for _, item := range arr {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// scalarInt returns v as an int when it holds the active value. Numbers
+// unmarshalled from JSON arrive as float64; the conversion truncates.
+func scalarInt(v any) int {
+	switch n := v.(type) {
+	case float64:
+		return int(n)
+	case int:
+		return n
+	}
+	return 0
+}
+
+// optionInts returns v as a slice of ints when it holds the list of
+// choices offered by the API, or nil otherwise.
+func optionInts(v any) []int {
+	arr, ok := v.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]int, 0, len(arr))
+	for _, item := range arr {
+		switch n := item.(type) {
+		case float64:
+			out = append(out, int(n))
+		case int:
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
 // PleskConfig represents Plesk installation configuration.
 type PleskConfig struct {
 	Active   bool   `json:"active"`
