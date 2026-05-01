@@ -1,0 +1,11 @@
+msg_file="$1"
+if grep -qiE \
+  -e 'co-authored-by:.*(claude|anthropic|copilot|chatgpt|openai|gemini|cursor)' \
+  -e 'noreply@anthropic\.com' \
+  -e '🤖[[:space:]]*generated with' \
+  -e 'generated with \[?claude' \
+  -e 'generated with \[?github copilot' \
+  "$msg_file"; then
+  echo "error: commit message contains AI attribution — remove it before committing." >&2
+  exit 1
+fi
