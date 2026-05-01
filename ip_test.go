@@ -3,6 +3,7 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -253,35 +254,21 @@ func TestIPService_GetTraffic(t *testing.T) {
 	}
 }
 
-func TestIPService_CancelIP(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/ip/123.123.123.123/cancellation" {
-			t.Errorf("expected path '/ip/123.123.123.123/cancellation', got '%s'", r.URL.Path)
-		}
-
-		if r.Method != "POST" {
-			t.Errorf("expected POST request, got '%s'", r.Method)
-		}
-
-		if err := r.ParseForm(); err != nil {
-			t.Fatalf("failed to parse form: %v", err)
-		}
-
-		if r.FormValue("cancellation_date") != "2024-12-31" {
-			t.Errorf("expected cancellation_date '2024-12-31', got '%s'", r.FormValue("cancellation_date"))
-		}
-
-		w.WriteHeader(http.StatusOK)
+func TestIPService_CancelIP_DisallowedByPolicy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("CancelIP must not perform an HTTP call; got %s %s", r.Method, r.URL.Path)
 	}))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-	ctx := context.Background()
 
-	ip := net.ParseIP("123.123.123.123")
-	err := client.IP.CancelIP(ctx, ip, "2024-12-31")
-	if err != nil {
-		t.Fatalf("IP.CancelIP returned error: %v", err)
+	err := client.IP.CancelIP(context.Background(), net.ParseIP("123.123.123.123"), "2024-12-31")
+	if !IsPolicyError(err) {
+		t.Fatalf("expected policy error, got %v", err)
+	}
+	var e *Error
+	if !errors.As(err, &e) || e.Status != 451 {
+		t.Fatalf("expected status 451, got %v", err)
 	}
 }
 
@@ -364,5 +351,77 @@ func TestIPService_ErrorHandling(t *testing.T) {
 				t.Errorf("expected error, got nil")
 			}
 		})
+	}
+}
+
+func TestIPService_GetMAC(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ip/123.123.123.123/mac" {
+			t.Errorf("expected path '/ip/123.123.123.123/mac', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET, got '%s'", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"mac": map[string]interface{}{
+				"ip":  "123.123.123.123",
+				"mac": "00:21:85:62:3e:9c",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	mac, err := client.IP.GetMAC(context.Background(), net.ParseIP("123.123.123.123"))
+	if err != nil {
+		t.Fatalf("IP.GetMAC returned error: %v", err)
+	}
+	if mac.MAC != "00:21:85:62:3e:9c" {
+		t.Errorf("expected mac '00:21:85:62:3e:9c', got '%s'", mac.MAC)
+	}
+}
+
+func TestIPService_SetMAC(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ip/123.123.123.123/mac" {
+			t.Errorf("expected path '/ip/123.123.123.123/mac', got '%s'", r.URL.Path)
+		}
+		if r.Method != "PUT" {
+			t.Errorf("expected PUT, got '%s'", r.Method)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"mac": map[string]interface{}{
+				"ip":  "123.123.123.123",
+				"mac": "00:21:85:62:3e:9c",
+			},
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	mac, err := client.IP.SetMAC(context.Background(), net.ParseIP("123.123.123.123"))
+	if err != nil {
+		t.Fatalf("IP.SetMAC returned error: %v", err)
+	}
+	if mac.MAC == "" {
+		t.Error("expected mac to be returned")
+	}
+}
+
+func TestIPService_DeleteMAC(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ip/123.123.123.123/mac" {
+			t.Errorf("expected path '/ip/123.123.123.123/mac', got '%s'", r.URL.Path)
+		}
+		if r.Method != "DELETE" {
+			t.Errorf("expected DELETE, got '%s'", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	if err := client.IP.DeleteMAC(context.Background(), net.ParseIP("123.123.123.123")); err != nil {
+		t.Fatalf("IP.DeleteMAC returned error: %v", err)
 	}
 }

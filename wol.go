@@ -39,3 +39,19 @@ func (w *WOLService) Send(ctx context.Context, serverID ServerID) (*WOLResponse,
 
 	return &wrapper.WOL, nil
 }
+
+// Get queries Wake-on-LAN data for a server, indicating whether WOL is
+// available without sending a packet.
+//
+// GET /wol/{server-number}
+//
+// See: https://robot.hetzner.com/doc/webservice/en.html#get-wol-server-number
+func (w *WOLService) Get(ctx context.Context, serverID ServerID) (*WOLResponse, error) {
+	var wrapper WOLWrapper
+	path := fmt.Sprintf("/wol/%s", serverID.String())
+
+	if err := w.client.Get(ctx, path, &wrapper); err != nil {
+		return nil, err
+	}
+	return &wrapper.WOL, nil
+}
