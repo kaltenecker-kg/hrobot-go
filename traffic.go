@@ -39,11 +39,6 @@ type TrafficStats struct {
 	Sum float64 `json:"sum"` // Total traffic in GB
 }
 
-// ServerTrafficResponse represents the API response for traffic data.
-type ServerTrafficResponse struct {
-	Traffic ServerTrafficData `json:"traffic"`
-}
-
 // TrafficGetParams represents parameters for retrieving traffic data.
 type TrafficGetParams struct {
 	Type         TrafficType // Type of data (day, month, year)

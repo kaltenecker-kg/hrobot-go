@@ -22,9 +22,12 @@ func TestUnwrapResponse(t *testing.T) {
 			expected: `{"id":123,"name":"test"}`,
 		},
 		{
-			name:     "wrapped in data key",
+			// `data` is not a wrapper key in any Hetzner Robot endpoint;
+			// it must pass through untouched so payloads with a top-level
+			// `data` field (e.g. traffic responses) keep their structure.
+			name:     "data key passes through unwrapped",
 			input:    `{"data":{"id":123}}`,
-			expected: `{"id":123}`,
+			expected: `{"data":{"id":123}}`,
 		},
 		{
 			name:     "wrapped in firewall key",

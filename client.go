@@ -117,10 +117,16 @@ func New(username, password string, opts ...ClientOption) *Client {
 	return NewClient(username, password, opts...)
 }
 
-// Response wrapper types to handle Hetzner's response structure.
+// responseWrapper unwraps Hetzner's `{"<resource>": ...}` envelopes for
+// callers that pass a raw value (rather than their own wrapper struct) to
+// client.Get/Post/Put. Each new endpoint either adds its key here or — the
+// preferred newer pattern — defines a private wrapper struct in its own
+// service file (see subnet.go and storagebox.go for examples).
+//
+// CAUTION: a JSON key listed here will be silently extracted from any
+// response body, so do not introduce a wrapper key whose name collides with
+// a real top-level field used by an unwrapped endpoint.
 type responseWrapper struct {
-	Data json.RawMessage `json:"data,omitempty"`
-	// Hetzner wraps responses in various keys
 	Server                  json.RawMessage `json:"server,omitempty"`
 	Servers                 json.RawMessage `json:"servers,omitempty"`
 	Firewall                json.RawMessage `json:"firewall,omitempty"`
@@ -208,9 +214,6 @@ func unwrapResponse(data []byte) (json.RawMessage, error) {
 	}
 
 	// Try each possible wrapper key
-	if len(wrapper.Data) > 0 {
-		return wrapper.Data, nil
-	}
 	if len(wrapper.Server) > 0 {
 		return wrapper.Server, nil
 	}
