@@ -41,6 +41,31 @@ func main() {
 }
 ```
 
+## Observability
+
+### Structured logging
+
+Pass a `*slog.Logger` via `WithLogger` to receive structured DEBUG-level
+events for every request, response, and retry. Authorization headers are
+never logged.
+
+```go
+logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+client := hrobot.NewClient(user, pass, hrobot.WithLogger(logger))
+```
+
+### Rate limits
+
+The client parses `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset`
+response headers, and retries on `429 Too Many Requests` honoring `Retry-After`.
+Inspect the most recent rate-limit state via `Client.LastRateLimit()`:
+
+```go
+rl := client.LastRateLimit()
+fmt.Printf("%d/%d remaining, resets at %s\n", rl.Remaining, rl.Limit, rl.Reset)
+```
+
 ## API Coverage
 
 | Service     | Status      | Description                                            |
