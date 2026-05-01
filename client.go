@@ -401,7 +401,7 @@ func errorFromResponse(statusCode int, body []byte) error {
 }
 
 // handleResponse processes the HTTP response and handles errors.
-func (c *Client) handleResponse(resp *http.Response, v any) error {
+func (c *Client) handleResponse(ctx context.Context, resp *http.Response, v any) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
@@ -409,7 +409,7 @@ func (c *Client) handleResponse(resp *http.Response, v any) error {
 		return NewNetworkError("failed to read response body", err)
 	}
 
-	c.logger.LogAttrs(context.Background(), slog.LevelDebug, "hrobot response",
+	c.logger.LogAttrs(ctx, slog.LevelDebug, "hrobot response",
 		slog.Int("status", resp.StatusCode),
 		slog.Int("body_bytes", len(body)),
 	)
@@ -442,7 +442,7 @@ func (c *Client) Get(ctx context.Context, path string, v any) error {
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // Post performs a POST request with form data.
@@ -456,7 +456,7 @@ func (c *Client) Post(ctx context.Context, path string, data url.Values, v any) 
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // PostRaw performs a POST request with pre-encoded form data string.
@@ -471,7 +471,7 @@ func (c *Client) PostRaw(ctx context.Context, path string, data string, v any) e
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // Put performs a PUT request with form data.
@@ -485,7 +485,7 @@ func (c *Client) Put(ctx context.Context, path string, data url.Values, v any) e
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // Delete performs a DELETE request.
@@ -494,7 +494,7 @@ func (c *Client) Delete(ctx context.Context, path string) error {
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, nil)
+	return c.handleResponse(ctx, resp, nil)
 }
 
 // DeleteWithBody performs a DELETE request with form data.
@@ -509,7 +509,7 @@ func (c *Client) DeleteWithBody(ctx context.Context, path string, data url.Value
 	if err != nil {
 		return err
 	}
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
 
 // GetWrappedList performs a GET for an array response whose elements are
@@ -545,5 +545,5 @@ func (c *Client) PostJSON(ctx context.Context, path string, body any, v any) err
 	}
 
 	c.updateRateLimit(resp.Header)
-	return c.handleResponse(resp, v)
+	return c.handleResponse(ctx, resp, v)
 }
