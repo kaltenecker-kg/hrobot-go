@@ -36,9 +36,10 @@ type RDNSListItem struct {
 func (r *RDNSService) List(ctx context.Context, serverIP string) ([]RDNS, error) {
 	path := "/rdns"
 
-	// Add optional server_ip filter
 	if serverIP != "" {
-		path += "?server_ip=" + url.QueryEscape(serverIP)
+		params := url.Values{}
+		params.Set("server_ip", serverIP)
+		path += "?" + params.Encode()
 	}
 
 	var result []RDNSListItem
