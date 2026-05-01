@@ -83,8 +83,8 @@ fmt.Printf("%d/%d remaining, resets at %s\n", rl.Remaining, rl.Limit, rl.Reset)
 | Auction     | Implemented | Auction server listing                                 |
 | Ordering    | Implemented | Read-only; order placement disallowed by client policy |
 | WOL         | Implemented | Wake-on-LAN                                            |
-| Subnet      | Stub        | Subnet management (not yet implemented)                |
-| Storage Box | Stub        | Storage box management (not yet implemented)           |
+| Subnet      | Implemented | Subnet list/get/update, MAC, cancellation status       |
+| Storage Box | Implemented | Box, snapshots, snapshot plan, sub-accounts            |
 
 ### Disallowed-by-policy operations
 
@@ -95,6 +95,7 @@ public API surface but short-circuit with an `*Error` of `Kind: Policy` and
 
 - `OrderingService.PlaceMarketOrder`, `PlaceProductOrder`, `PlaceAddonOrder`
 - `ServerService.RequestCancellation`
+- `IPService.CancelIP`
 - `SubnetService.Cancel`
 
 Reads (lists, transactions, cancellation status) and recovery operations
