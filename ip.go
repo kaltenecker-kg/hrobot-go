@@ -133,7 +133,7 @@ func (i *IPService) SetTrafficWarnings(ctx context.Context, ip net.IP, enabled b
 //
 // Disallowed by client policy: this operation is implemented but never
 // invoked. Cancel IPs via the Hetzner Robot UI.
-func (i *IPService) CancelIP(_ context.Context, _ net.IP, _ string) error {
+func (i *IPService) CancelIP(context.Context, net.IP, string) error {
 	return NewPolicyError("IPService.CancelIP")
 }
 

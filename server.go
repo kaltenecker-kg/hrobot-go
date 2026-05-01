@@ -62,7 +62,7 @@ type Cancellation struct {
 //
 // Disallowed by client policy: this operation is implemented but never
 // invoked. Cancel servers via the Hetzner Robot UI.
-func (s *ServerService) RequestCancellation(_ context.Context, _ Cancellation) error {
+func (s *ServerService) RequestCancellation(context.Context, Cancellation) error {
 	return NewPolicyError("ServerService.RequestCancellation")
 }
 
