@@ -410,8 +410,8 @@ func TestBootService_ActivateVNC(t *testing.T) {
 		}
 
 		password := "vnc-password"
-		// "vnc" is not a registered response wrapper key, so the fixture
-		// is returned unwrapped and decoded directly into VNCConfig.
+		// Multi-field top-level object — the auto-unwrap leaves it alone
+		// and it decodes directly into VNCConfig.
 		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
@@ -477,7 +477,6 @@ func TestBootService_GetLastLinux(t *testing.T) {
 		}
 
 		password := "last-linux-pw"
-		// "linux" is not a registered response wrapper key.
 		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
@@ -518,7 +517,6 @@ func TestBootService_GetWindows(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		// "windows" is not a registered response wrapper key.
 		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,
@@ -565,7 +563,6 @@ func TestBootService_ActivateWindows(t *testing.T) {
 		}
 
 		password := "windows-pw"
-		// "windows" is not a registered response wrapper key.
 		response := map[string]any{
 			"server_ip":     "123.123.123.123",
 			"server_number": 321,

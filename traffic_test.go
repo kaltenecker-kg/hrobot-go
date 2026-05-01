@@ -37,12 +37,10 @@ func TestTrafficService_Get(t *testing.T) {
 			t.Errorf("expected single_values 'true', got '%s'", got)
 		}
 
-		// The client's response unwrapper consumes a top-level "data" or
-		// "traffic" key (see responseWrapper in client.go), so /traffic
-		// responses don't round-trip cleanly into ServerTrafficData. We
-		// therefore return an empty object — it's enough to verify that
-		// the request was issued correctly with the expected form fields
-		// and that the response decode does not error.
+		// We return an empty object here because this test focuses on the
+		// request shape (form fields, path, method); the response decode
+		// just needs to not error. ServerTrafficData has multiple top-level
+		// keys, so the auto-unwrap leaves it alone.
 		response := map[string]any{}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
