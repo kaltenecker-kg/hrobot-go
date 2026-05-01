@@ -7,7 +7,10 @@ import (
 
 // Error represents all possible errors from the hrobot library.
 type Error struct {
-	Kind    ErrorKind
+	Kind ErrorKind
+	// Status is the HTTP-style status code associated with this error.
+	// Zero means none was attached (e.g. local errors before any HTTP call).
+	Status  int
 	Message string
 	Cause   error
 }
@@ -31,6 +34,7 @@ const (
 	ErrKindNetwork ErrorKind = "Network"
 	ErrKindParse   ErrorKind = "Parse"
 	ErrKindAuth    ErrorKind = "Auth"
+	ErrKindPolicy  ErrorKind = "Policy"
 )
 
 // NewAPIError creates a new API error.
@@ -64,6 +68,19 @@ func NewAuthError(message string) *Error {
 	return &Error{
 		Kind:    ErrKindAuth,
 		Message: message,
+	}
+}
+
+// NewPolicyError returns an error indicating that the named operation is
+// implemented in this client but intentionally not invoked: purchasing or
+// destructively cancelling Hetzner resources is reserved for the Robot UI to
+// avoid automation accidents. The returned error carries HTTP status 451 to
+// signal that the block is non-technical.
+func NewPolicyError(operation string) *Error {
+	return &Error{
+		Kind:    ErrKindPolicy,
+		Status:  451,
+		Message: fmt.Sprintf("[%s] %s is disallowed by client policy; perform this action via the Hetzner Robot UI", ErrDisallowedByClientPolicy, operation),
 	}
 }
 
@@ -107,6 +124,9 @@ const (
 	// Reverse DNS errors.
 	ErrReverseDNSNotFound ErrorCode = "RDNS_NOT_FOUND"
 	ErrReverseDNSInvalid  ErrorCode = "RDNS_INVALID"
+
+	// Client policy.
+	ErrDisallowedByClientPolicy ErrorCode = "DISALLOWED_BY_CLIENT_POLICY"
 
 	// Unknown error.
 	ErrUnknown ErrorCode = "UNKNOWN"
@@ -191,4 +211,11 @@ func IsFirewallRuleLimitExceededError(err error) bool {
 // IsInvalidInputError checks if the error is an invalid input error.
 func IsInvalidInputError(err error) bool {
 	return IsAPIError(err, ErrInvalidInput)
+}
+
+// IsPolicyError reports whether err was returned because the operation is
+// disallowed by client-side policy (and so never reached the Hetzner API).
+func IsPolicyError(err error) bool {
+	e, ok := err.(*Error)
+	return ok && e.Kind == ErrKindPolicy
 }

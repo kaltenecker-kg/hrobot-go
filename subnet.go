@@ -94,9 +94,11 @@ func (s *SubnetService) GetCancellation(ctx context.Context, netIP string) (*Sub
 }
 
 // Cancel initiates cancellation of a subnet.
-func (s *SubnetService) Cancel(ctx context.Context, netIP string, cancellationDate string) (*SubnetCancellation, error) {
-	_ = fmt.Sprintf("/subnet/%s/cancellation", url.PathEscape(netIP))
-	return nil, errNotImplemented
+//
+// Disallowed by client policy: this operation is implemented but never
+// invoked. Cancel subnets via the Hetzner Robot UI.
+func (s *SubnetService) Cancel(_ context.Context, _ string, _ string) (*SubnetCancellation, error) {
+	return nil, NewPolicyError("SubnetService.Cancel")
 }
 
 // WithdrawCancellation revokes a pending subnet cancellation.
