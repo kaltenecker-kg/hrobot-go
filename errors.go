@@ -2,21 +2,32 @@ package hrobot
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 )
 
 // Error represents all possible errors from the hrobot library.
 type Error struct {
-	Kind    ErrorKind
+	Kind ErrorKind
+	// Code is the Hetzner-side error code, set for API errors. Empty for
+	// non-API errors (network, parse, auth, policy).
+	Code ErrorCode
+	// Status is the HTTP-style status code associated with this error.
+	// Zero means none was attached (e.g. local errors before any HTTP call).
+	Status  int
 	Message string
 	Cause   error
 }
 
 func (e *Error) Error() string {
-	if e.Cause != nil {
-		return fmt.Sprintf("%s: %s: %v", e.Kind, e.Message, e.Cause)
+	prefix := string(e.Kind)
+	if e.Code != "" {
+		prefix = fmt.Sprintf("%s[%s]", e.Kind, e.Code)
 	}
-	return fmt.Sprintf("%s: %s", e.Kind, e.Message)
+	if e.Cause != nil {
+		return fmt.Sprintf("%s: %s: %v", prefix, e.Message, e.Cause)
+	}
+	return fmt.Sprintf("%s: %s", prefix, e.Message)
 }
 
 func (e *Error) Unwrap() error {
@@ -26,18 +37,31 @@ func (e *Error) Unwrap() error {
 // ErrorKind categorizes the error type.
 type ErrorKind string
 
+// ErrorKind values categorize errors returned by this library.
 const (
 	ErrKindAPI     ErrorKind = "API"
 	ErrKindNetwork ErrorKind = "Network"
 	ErrKindParse   ErrorKind = "Parse"
 	ErrKindAuth    ErrorKind = "Auth"
+	ErrKindPolicy  ErrorKind = "Policy"
 )
 
 // NewAPIError creates a new API error.
 func NewAPIError(code ErrorCode, message string) *Error {
 	return &Error{
 		Kind:    ErrKindAPI,
-		Message: fmt.Sprintf("[%s] %s", code, message),
+		Code:    code,
+		Message: message,
+	}
+}
+
+// newAPIErrorWithStatus creates an API error including the HTTP status code.
+func newAPIErrorWithStatus(code ErrorCode, message string, status int) *Error {
+	return &Error{
+		Kind:    ErrKindAPI,
+		Code:    code,
+		Status:  status,
+		Message: message,
 	}
 }
 
@@ -67,11 +91,26 @@ func NewAuthError(message string) *Error {
 	}
 }
 
+// NewPolicyError returns an error indicating that the named operation is
+// implemented in this client but intentionally not invoked: purchasing or
+// destructively cancelling Hetzner resources is reserved for the Robot UI to
+// avoid automation accidents. The returned error carries HTTP status 451 to
+// signal that the block is non-technical.
+func NewPolicyError(operation string) *Error {
+	return &Error{
+		Kind:    ErrKindPolicy,
+		Code:    ErrDisallowedByClientPolicy,
+		Status:  451,
+		Message: fmt.Sprintf("%s is disallowed by client policy; perform this action via the Hetzner Robot UI", operation),
+	}
+}
+
 // ErrorCode represents specific API error codes from Hetzner.
 type ErrorCode string
 
+// ErrorCode values mirror the `code` field returned by the Hetzner Robot
+// API on error responses.
 const (
-	// Common errors.
 	ErrUnauthorized            ErrorCode = "UNAUTHORIZED"
 	ErrInvalidInput            ErrorCode = "INVALID_INPUT"
 	ErrInvalidInputServerIP    ErrorCode = "INVALID_INPUT_SERVER_IP"
@@ -83,32 +122,32 @@ const (
 	ErrRateLimitExceeded       ErrorCode = "RATE_LIMIT_EXCEEDED"
 	ErrMaintenanceMode         ErrorCode = "MAINTENANCE_MODE"
 
-	// Firewall errors.
 	ErrFirewallInProcess         ErrorCode = "FIREWALL_IN_PROCESS"
 	ErrFirewallAlreadyActive     ErrorCode = "FIREWALL_ALREADY_ACTIVE"
 	ErrFirewallAlreadyDisabled   ErrorCode = "FIREWALL_ALREADY_DISABLED"
 	ErrFirewallConfigInvalid     ErrorCode = "FIREWALL_CONFIG_INVALID"
 	ErrFirewallRuleLimitExceeded ErrorCode = "FIREWALL_RULE_LIMIT_EXCEEDED"
 
-	// Boot errors.
 	ErrBootConfigNotFound  ErrorCode = "BOOT_CONFIG_NOT_FOUND"
 	ErrBootAlreadyActive   ErrorCode = "BOOT_ALREADY_ACTIVE"
 	ErrRescueNotActive     ErrorCode = "RESCUE_NOT_ACTIVE"
 	ErrRescueAlreadyActive ErrorCode = "RESCUE_ALREADY_ACTIVE"
 
-	// Reset errors.
 	ErrResetNotAvailable ErrorCode = "RESET_NOT_AVAILABLE"
 	ErrResetManualActive ErrorCode = "RESET_MANUAL_ACTIVE"
 
-	// VNC errors.
 	ErrVNCDisabled     ErrorCode = "VNC_DISABLED"
 	ErrVNCNotAvailable ErrorCode = "VNC_NOT_AVAILABLE"
 
-	// Reverse DNS errors.
 	ErrReverseDNSNotFound ErrorCode = "RDNS_NOT_FOUND"
 	ErrReverseDNSInvalid  ErrorCode = "RDNS_INVALID"
 
-	// Unknown error.
+	// ErrDisallowedByClientPolicy is returned by stub methods that this
+	// client refuses to call against the live API; see NewPolicyError.
+	ErrDisallowedByClientPolicy ErrorCode = "DISALLOWED_BY_CLIENT_POLICY"
+
+	// ErrUnknown is set when the error response from the API could not be
+	// parsed or did not include a recognised code.
 	ErrUnknown ErrorCode = "UNKNOWN"
 )
 
@@ -138,29 +177,23 @@ func (d *APIErrorDetail) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Try to unmarshal code as string
 	var codeStr string
 	if err := json.Unmarshal(aux.Code, &codeStr); err == nil {
 		d.Code = ErrorCode(codeStr)
 		return nil
 	}
 
-	// If not a string, set as unknown
 	d.Code = ErrUnknown
 	return nil
 }
 
-// IsAPIError checks if an error is an API error with a specific code.
+// IsAPIError reports whether err is, or wraps, an API error with the given code.
 func IsAPIError(err error, code ErrorCode) bool {
-	if e, ok := err.(*Error); ok {
-		if e.Kind != ErrKindAPI {
-			return false
-		}
-		// Message is formatted as "[CODE] message"
-		codeStr := fmt.Sprintf("[%s]", code)
-		return len(e.Message) >= len(codeStr) && e.Message[:len(codeStr)] == codeStr
+	var e *Error
+	if !errors.As(err, &e) {
+		return false
 	}
-	return false
+	return e.Kind == ErrKindAPI && e.Code == code
 }
 
 // IsRateLimitError checks if the error is a rate limit error.
@@ -191,4 +224,11 @@ func IsFirewallRuleLimitExceededError(err error) bool {
 // IsInvalidInputError checks if the error is an invalid input error.
 func IsInvalidInputError(err error) bool {
 	return IsAPIError(err, ErrInvalidInput)
+}
+
+// IsPolicyError reports whether err was returned because the operation is
+// disallowed by client-side policy (and so never reached the Hetzner API).
+func IsPolicyError(err error) bool {
+	var e *Error
+	return errors.As(err, &e) && e.Kind == ErrKindPolicy
 }

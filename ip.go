@@ -130,17 +130,59 @@ func (i *IPService) SetTrafficWarnings(ctx context.Context, ip net.IP, enabled b
 }
 
 // CancelIP cancels an additional IP address.
-func (i *IPService) CancelIP(ctx context.Context, ip net.IP, cancellationDate string) error {
-	path := fmt.Sprintf("/ip/%s/cancellation", ip.String())
-
-	data := url.Values{}
-	data.Set("cancellation_date", cancellationDate)
-
-	return i.client.Post(ctx, path, data, nil)
+//
+// Disallowed by client policy: this operation is implemented but never
+// invoked. Cancel IPs via the Hetzner Robot UI.
+func (i *IPService) CancelIP(context.Context, net.IP, string) error {
+	return NewPolicyError("IPService.CancelIP")
 }
 
 // WithdrawIPCancellation withdraws an IP cancellation.
 func (i *IPService) WithdrawIPCancellation(ctx context.Context, ip net.IP) error {
 	path := fmt.Sprintf("/ip/%s/cancellation", ip.String())
+	return i.client.Delete(ctx, path)
+}
+
+// IPMAC represents the separate MAC address of an IP.
+type IPMAC struct {
+	IP  net.IP `json:"ip"`
+	MAC string `json:"mac"`
+}
+
+// GetMAC retrieves the separate MAC address for an IP, if one is set.
+//
+// GET /ip/{ip}/mac
+//
+// See: https://robot.hetzner.com/doc/webservice/en.html#get-ip-ip-mac
+func (i *IPService) GetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
+	path := fmt.Sprintf("/ip/%s/mac", ip.String())
+	var mac IPMAC
+	if err := i.client.Get(ctx, path, &mac); err != nil {
+		return nil, err
+	}
+	return &mac, nil
+}
+
+// SetMAC generates a separate MAC address for an IP.
+//
+// PUT /ip/{ip}/mac
+//
+// See: https://robot.hetzner.com/doc/webservice/en.html#put-ip-ip-mac
+func (i *IPService) SetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
+	path := fmt.Sprintf("/ip/%s/mac", ip.String())
+	var mac IPMAC
+	if err := i.client.Put(ctx, path, nil, &mac); err != nil {
+		return nil, err
+	}
+	return &mac, nil
+}
+
+// DeleteMAC removes the separate MAC address from an IP.
+//
+// DELETE /ip/{ip}/mac
+//
+// See: https://robot.hetzner.com/doc/webservice/en.html#delete-ip-ip-mac
+func (i *IPService) DeleteMAC(ctx context.Context, ip net.IP) error {
+	path := fmt.Sprintf("/ip/%s/mac", ip.String())
 	return i.client.Delete(ctx, path)
 }

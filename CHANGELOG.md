@@ -9,6 +9,13 @@ BREAKING CHANGES:
 - **restructure**: Module path changed to `github.com/kaltenecker-kg/hrobot-go`
 - **restructure**: CLI tool and Terraform provider removed; this package is now a library only
 - **restructure**: API client code moved from `pkg/hrobot/` to repository root
+- **client**: `WithDebug(bool)` replaced by `WithLogger(*slog.Logger)`; debug output is now structured `slog`
+  events at DEBUG level instead of `fmt.Printf` traces
+- **errors**: API error code is now a typed `Code` field on `*Error` (no longer embedded in the message string).
+  Callers using `IsAPIError` are unaffected; callers comparing the message text must read `err.Code` instead
+- **firewall**: Drop exported `FirewallTemplateWrapper` (use `*FirewallTemplate` directly)
+- **wol**: Drop exported `WOLWrapper` (use `*WOLResponse` directly)
+- **rdns**: Drop exported `RDNSListItem` (`List` returns `[]RDNS` directly)
 
 FEATURES:
 
@@ -16,6 +23,23 @@ FEATURES:
 - **storagebox**: Add stub StorageBoxService for storage box API
 - **boot**: Add GetLastLinux, GetWindows, ActivateWindows, DeactivateWindows methods
 - **ordering**: Add ListMarketProducts, GetMarketProduct, ListTransactions, GetTransaction, ListAddonProducts methods
+- **client**: Track rate limits — parses `RateLimit-Limit/Remaining/Reset` response headers and exposes
+  `Client.LastRateLimit()`
+- **client**: Retry on `429 Too Many Requests` honoring the `Retry-After` header
+- **errors**: `*Error` carries the HTTP status from the response in its `Status` field
+
+IMPROVEMENTS:
+
+- **client**: Cap `401 Unauthorized` retries at one extra attempt (was three), so invalid credentials no longer loop
+- **client**: Replace the 17-key wrapper-key registry in `unwrapResponse` with a heuristic auto-unwrap; new
+  endpoints no longer require a registry edit
+- **boot**: `RescueConfig`, `LinuxConfig`, `VNCConfig`, and `WindowsConfig` gain typed `Active*` / `Available*`
+  accessors so callers can extract the active scalar or the option list without type-asserting on `any`
+- **errors**: `IsAPIError` and friends use `errors.As` and unwrap through wrapped errors
+- **firewall**: Deduplicate rule-encoding logic across `Update`, `CreateTemplate`, and `UpdateTemplate`;
+  `Update` now sends literal brackets in `rules[...]` keys (the previous path round-tripped through `url.Values`
+  and would have URL-encoded them)
+- **deps**: Bump minimum Go to 1.26
 
 ## 0.2.0 (2024-11-07)
 

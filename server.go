@@ -59,16 +59,11 @@ type Cancellation struct {
 }
 
 // RequestCancellation requests cancellation of a server.
-func (s *ServerService) RequestCancellation(ctx context.Context, req Cancellation) error {
-	path := fmt.Sprintf("/server/%s/cancellation", req.ServerID.String())
-
-	data := make(map[string]string)
-	data["cancellation_date"] = req.CancellationDate
-	if req.CancellationReason != "" {
-		data["cancellation_reason"] = req.CancellationReason
-	}
-
-	return s.client.Post(ctx, path, encodeForm(data), nil)
+//
+// Disallowed by client policy: this operation is implemented but never
+// invoked. Cancel servers via the Hetzner Robot UI.
+func (s *ServerService) RequestCancellation(context.Context, Cancellation) error {
+	return NewPolicyError("ServerService.RequestCancellation")
 }
 
 // WithdrawCancellation withdraws a server cancellation request.

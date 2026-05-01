@@ -18,9 +18,9 @@ func TestBootService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]interface{}{
-			"boot": map[string]interface{}{
-				"rescue": map[string]interface{}{
+		response := map[string]any{
+			"boot": map[string]any{
+				"rescue": map[string]any{
 					"server_ip":      "123.123.123.123",
 					"server_number":  321,
 					"active":         false,
@@ -29,7 +29,7 @@ func TestBootService_Get(t *testing.T) {
 					"authorized_key": []string{},
 					"host_key":       []string{},
 				},
-				"linux": map[string]interface{}{
+				"linux": map[string]any{
 					"server_ip":      "123.123.123.123",
 					"server_number":  321,
 					"dist":           []string{"Ubuntu 22.04", "Debian 12"},
@@ -132,8 +132,8 @@ func TestBootService_ActivateRescue(t *testing.T) {
 				}
 
 				password := "test-password-123"
-				response := map[string]interface{}{
-					"rescue": map[string]interface{}{
+				response := map[string]any{
+					"rescue": map[string]any{
 						"server_ip":      "123.123.123.123",
 						"server_number":  321,
 						"active":         true,
@@ -205,8 +205,8 @@ func TestBootService_GetLastRescue(t *testing.T) {
 		}
 
 		password := "previous-password-456"
-		response := map[string]interface{}{
-			"rescue": map[string]interface{}{
+		response := map[string]any{
+			"rescue": map[string]any{
 				"server_ip":      "123.123.123.123",
 				"server_number":  321,
 				"active":         false,
@@ -363,10 +363,10 @@ func TestBootService_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"error": map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
 						"status":  tt.statusCode,
 						"code":    "ERROR",
 						"message": "test error",
@@ -386,6 +386,233 @@ func TestBootService_ErrorHandling(t *testing.T) {
 	}
 }
 
+func TestBootService_ActivateVNC(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/vnc" {
+			t.Errorf("expected path '/boot/321/vnc', got '%s'", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("dist") != "Debian 12" {
+			t.Errorf("expected dist 'Debian 12', got '%s'", r.FormValue("dist"))
+		}
+		if r.FormValue("arch") != "64" {
+			t.Errorf("expected arch '64', got '%s'", r.FormValue("arch"))
+		}
+		if r.FormValue("lang") != "en" {
+			t.Errorf("expected lang 'en', got '%s'", r.FormValue("lang"))
+		}
+
+		password := "vnc-password"
+		// Multi-field top-level object — the auto-unwrap leaves it alone
+		// and it decodes directly into VNCConfig.
+		response := map[string]any{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"active":        true,
+			"dist":          "Debian 12",
+			"arch":          64,
+			"lang":          "en",
+			"password":      password,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	vnc, err := client.Boot.ActivateVNC(ctx, ServerID(321), "Debian 12", 64, "en")
+	if err != nil {
+		t.Fatalf("Boot.ActivateVNC returned error: %v", err)
+	}
+
+	if !vnc.Active {
+		t.Error("expected VNC to be active")
+	}
+	if vnc.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", vnc.ServerNumber)
+	}
+	if vnc.Password == nil || *vnc.Password != "vnc-password" {
+		t.Errorf("expected password 'vnc-password', got %v", vnc.Password)
+	}
+}
+
+func TestBootService_DeactivateVNC(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/vnc" {
+			t.Errorf("expected path '/boot/321/vnc', got '%s'", r.URL.Path)
+		}
+		if r.Method != "DELETE" {
+			t.Errorf("expected DELETE request, got '%s'", r.Method)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if err := client.Boot.DeactivateVNC(ctx, ServerID(321)); err != nil {
+		t.Fatalf("Boot.DeactivateVNC returned error: %v", err)
+	}
+}
+
+func TestBootService_GetLastLinux(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/linux/last" {
+			t.Errorf("expected path '/boot/321/linux/last', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET request, got '%s'", r.Method)
+		}
+
+		password := "last-linux-pw"
+		response := map[string]any{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"dist":          "Ubuntu 22.04",
+			"arch":          64,
+			"lang":          "en",
+			"active":        false,
+			"password":      password,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	linux, err := client.Boot.GetLastLinux(ctx, ServerID(321))
+	if err != nil {
+		t.Fatalf("Boot.GetLastLinux returned error: %v", err)
+	}
+
+	if linux.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", linux.ServerNumber)
+	}
+	if linux.Password == nil || *linux.Password != "last-linux-pw" {
+		t.Errorf("expected password 'last-linux-pw', got %v", linux.Password)
+	}
+}
+
+func TestBootService_GetWindows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/windows" {
+			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
+		}
+		if r.Method != "GET" {
+			t.Errorf("expected GET request, got '%s'", r.Method)
+		}
+
+		response := map[string]any{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"active":        false,
+			"lang":          []string{"en", "de"},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	windows, err := client.Boot.GetWindows(ctx, ServerID(321))
+	if err != nil {
+		t.Fatalf("Boot.GetWindows returned error: %v", err)
+	}
+
+	if windows.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", windows.ServerNumber)
+	}
+	if windows.Active {
+		t.Error("expected windows to be inactive")
+	}
+}
+
+func TestBootService_ActivateWindows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/windows" {
+			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("lang") != "en" {
+			t.Errorf("expected lang 'en', got '%s'", r.FormValue("lang"))
+		}
+
+		password := "windows-pw"
+		response := map[string]any{
+			"server_ip":     "123.123.123.123",
+			"server_number": 321,
+			"active":        true,
+			"lang":          "en",
+			"password":      password,
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	windows, err := client.Boot.ActivateWindows(ctx, ServerID(321), "en")
+	if err != nil {
+		t.Fatalf("Boot.ActivateWindows returned error: %v", err)
+	}
+
+	if !windows.Active {
+		t.Error("expected windows to be active")
+	}
+	if windows.Password == nil || *windows.Password != "windows-pw" {
+		t.Errorf("expected password 'windows-pw', got %v", windows.Password)
+	}
+}
+
+func TestBootService_DeactivateWindows(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/boot/321/windows" {
+			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
+		}
+		if r.Method != "DELETE" {
+			t.Errorf("expected DELETE request, got '%s'", r.Method)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if err := client.Boot.DeactivateWindows(ctx, ServerID(321)); err != nil {
+		t.Fatalf("Boot.DeactivateWindows returned error: %v", err)
+	}
+}
+
 func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
@@ -401,8 +628,8 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 		}
 
 		password := "test-password"
-		response := map[string]interface{}{
-			"rescue": map[string]interface{}{
+		response := map[string]any{
+			"rescue": map[string]any{
 				"server_ip":      "123.123.123.123",
 				"server_number":  321,
 				"active":         true,
@@ -428,4 +655,70 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 	if !rescue.Active {
 		t.Error("expected rescue to be active")
 	}
+}
+
+func TestRescueConfig_Accessors(t *testing.T) {
+	t.Run("inactive returns options", func(t *testing.T) {
+		body := []byte(`{"active":false,"os":["linux","vkvm"],"arch":[64,32]}`)
+		var c RescueConfig
+		if err := json.Unmarshal(body, &c); err != nil {
+			t.Fatal(err)
+		}
+		if got := c.ActiveOS(); got != "" {
+			t.Errorf("ActiveOS = %q, want \"\"", got)
+		}
+		if got := c.AvailableOS(); !equalStringSlice(got, []string{"linux", "vkvm"}) {
+			t.Errorf("AvailableOS = %v", got)
+		}
+		if got := c.ActiveArch(); got != 0 {
+			t.Errorf("ActiveArch = %d, want 0", got)
+		}
+		if got := c.AvailableArchs(); !equalIntSlice(got, []int{64, 32}) {
+			t.Errorf("AvailableArchs = %v", got)
+		}
+	})
+
+	t.Run("active returns scalar", func(t *testing.T) {
+		body := []byte(`{"active":true,"os":"linux","arch":64}`)
+		var c RescueConfig
+		if err := json.Unmarshal(body, &c); err != nil {
+			t.Fatal(err)
+		}
+		if got := c.ActiveOS(); got != "linux" {
+			t.Errorf("ActiveOS = %q, want \"linux\"", got)
+		}
+		if got := c.AvailableOS(); got != nil {
+			t.Errorf("AvailableOS = %v, want nil", got)
+		}
+		if got := c.ActiveArch(); got != 64 {
+			t.Errorf("ActiveArch = %d, want 64", got)
+		}
+		if got := c.AvailableArchs(); got != nil {
+			t.Errorf("AvailableArchs = %v, want nil", got)
+		}
+	})
+}
+
+func equalStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalIntSlice(a, b []int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
