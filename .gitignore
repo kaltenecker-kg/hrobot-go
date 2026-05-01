@@ -25,7 +25,18 @@ coverage.html
 vendor/
 
 # Local AI/agent tooling — not part of the project
-.claude
+.claude/
+.copilot/
+.cursor/
+.aider*
+.continue/
+.windsurf/
+.zed/
+AGENTS.md
+CLAUDE.md
+COPILOT.md
+GEMINI.md
+.github/copilot-instructions.md
 
 # Git worktrees
 .worktrees/

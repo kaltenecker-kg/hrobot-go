@@ -42,5 +42,28 @@
     };
     # Try not to leak secrets
     ripsecrets.enable = true;
+    # Reject AI attribution lines in commit messages.
+    no-ai-attribution = {
+      enable = true;
+      name = "no AI attribution in commit messages";
+      stages = [ "commit-msg" ];
+      language = "system";
+      entry = toString (
+        pkgs.writeShellScript "no-ai-attribution" ''
+          set -eu
+          msg_file="$1"
+          if ${pkgs.gnugrep}/bin/grep -qiE \
+            -e 'co-authored-by:.*(claude|anthropic|copilot|chatgpt|openai|gemini|cursor)' \
+            -e 'noreply@anthropic\.com' \
+            -e '🤖[[:space:]]*generated with' \
+            -e 'generated with \[?claude' \
+            -e 'generated with \[?github copilot' \
+            "$msg_file"; then
+            echo "error: commit message contains AI attribution — remove it before committing." >&2
+            exit 1
+          fi
+        ''
+      );
+    };
   };
 }
