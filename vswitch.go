@@ -159,9 +159,6 @@ func (v *VSwitchService) AddServers(ctx context.Context, id int, servers []strin
 //
 // DELETE /vswitch/{vswitch-id}/server
 //
-// Note: The API uses DELETE with a body, which is unusual.
-// We'll use PostRaw with the appropriate method.
-//
 // See: https://robot.hetzner.com/doc/webservice/en.html#delete-vswitch-vswitch-id-server
 func (v *VSwitchService) RemoveServers(ctx context.Context, id int, servers []string) error {
 	path := fmt.Sprintf("/vswitch/%d/server", id)
@@ -173,8 +170,8 @@ func (v *VSwitchService) RemoveServers(ctx context.Context, id int, servers []st
 	}
 	formData := strings.Join(formParts, "&")
 
-	// For now, use PostRaw - we may need to enhance the client to support DELETE with body
-	return v.client.PostRaw(ctx, path, formData, nil)
+	// Use DeleteRaw to avoid url.Values encoding the brackets
+	return v.client.DeleteRaw(ctx, path, formData, nil)
 }
 
 // WaitForVSwitchReady waits for a vSwitch to finish processing and become ready.

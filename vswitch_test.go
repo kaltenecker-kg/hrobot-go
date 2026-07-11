@@ -291,22 +291,17 @@ func TestVSwitchService_RemoveServers(t *testing.T) {
 		if r.URL.Path != "/vswitch/12345/server" {
 			t.Errorf("expected path '/vswitch/12345/server', got '%s'", r.URL.Path)
 		}
-		// RemoveServers uses PostRaw which sends as POST (see vswitch.go:177)
-		if r.Method != "POST" {
-			t.Errorf("expected POST request, got '%s'", r.Method)
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE request, got '%s'", r.Method)
 		}
 
-		if err := r.ParseForm(); err != nil {
-			t.Fatalf("failed to parse form: %v", err)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read body: %v", err)
 		}
 
-		servers := r.Form["server[]"]
-		if len(servers) != 1 {
-			t.Errorf("expected 1 server, got %d", len(servers))
-		}
-
-		if len(servers) > 0 && servers[0] != "123.123.123.123" {
-			t.Errorf("expected server '123.123.123.123', got '%s'", servers[0])
+		if string(body) != "server[]=123.123.123.123" {
+			t.Errorf("expected body 'server[]=123.123.123.123', got '%s'", string(body))
 		}
 
 		w.WriteHeader(http.StatusOK)
