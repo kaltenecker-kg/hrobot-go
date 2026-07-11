@@ -2,7 +2,6 @@ package hrobot
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -37,13 +36,25 @@ func TestTrafficService_Get(t *testing.T) {
 			t.Errorf("expected single_values 'true', got '%s'", got)
 		}
 
-		// We return an empty object here because this test focuses on the
-		// request shape (form fields, path, method); the response decode
-		// just needs to not error. ServerTrafficData has multiple top-level
-		// keys, so the auto-unwrap leaves it alone.
-		response := map[string]any{}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+		// Doc-verbatim response shape for POST /traffic with single_values.
+		const body = `{
+			"traffic": {
+				"type": "day",
+				"from": "2024-01-01",
+				"to": "2024-01-31",
+				"data": {
+					"123.123.123.123": {
+						"2010-09-01": {
+							"in": 0.2874,
+							"out": 0.0481,
+							"sum": 0.3355
+						}
+					}
+				}
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -65,6 +76,37 @@ func TestTrafficService_Get(t *testing.T) {
 	if traffic == nil {
 		t.Fatal("expected non-nil traffic result")
 	}
+
+	if traffic.Type != "day" {
+		t.Errorf("expected type 'day', got '%s'", traffic.Type)
+	}
+	if traffic.From != "2024-01-01" {
+		t.Errorf("expected from '2024-01-01', got '%s'", traffic.From)
+	}
+	if traffic.To != "2024-01-31" {
+		t.Errorf("expected to '2024-01-31', got '%s'", traffic.To)
+	}
+	if traffic.Data != nil {
+		t.Errorf("expected Data to be nil in single_values mode, got %v", traffic.Data)
+	}
+
+	ipData, ok := traffic.SingleValues["123.123.123.123"]
+	if !ok {
+		t.Fatal("expected SingleValues to contain IP '123.123.123.123'")
+	}
+	stats, ok := ipData["2010-09-01"]
+	if !ok {
+		t.Fatal("expected SingleValues[ip] to contain interval '2010-09-01'")
+	}
+	if stats.In != 0.2874 {
+		t.Errorf("expected In 0.2874, got %v", stats.In)
+	}
+	if stats.Out != 0.0481 {
+		t.Errorf("expected Out 0.0481, got %v", stats.Out)
+	}
+	if stats.Sum != 0.3355 {
+		t.Errorf("expected Sum 0.3355, got %v", stats.Sum)
+	}
 }
 
 func TestTrafficService_Get_NoSingleValues(t *testing.T) {
@@ -83,25 +125,57 @@ func TestTrafficService_Get_NoSingleValues(t *testing.T) {
 			t.Errorf("expected ip to be absent, got '%s'", r.FormValue("ip"))
 		}
 
-		response := map[string]any{
-			"type": "month",
-			"from": "2024-01-01",
-			"to":   "2024-01-31",
-			"data": map[string]any{},
+		// Doc-verbatim response shape for POST /traffic without single_values.
+		const body = `{
+			"traffic": {
+				"type": "month",
+				"from": "2024-01-01",
+				"to": "2024-01-31",
+				"data": {
+					"123.123.123.123": {
+						"in": 0.2874,
+						"out": 0.0481,
+						"sum": 0.3355
+					}
+				}
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
-		_ = json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	ctx := context.Background()
 
-	_, err := client.Traffic.Get(ctx, TrafficGetParams{
+	traffic, err := client.Traffic.Get(ctx, TrafficGetParams{
 		Type: TrafficTypeMonth,
 		From: "2024-01-01",
 		To:   "2024-01-31",
 	})
 	if err != nil {
 		t.Fatalf("Traffic.Get returned error: %v", err)
+	}
+
+	if traffic.Type != "month" {
+		t.Errorf("expected type 'month', got '%s'", traffic.Type)
+	}
+	if traffic.SingleValues != nil {
+		t.Errorf("expected SingleValues to be nil in default mode, got %v", traffic.SingleValues)
+	}
+
+	stats, ok := traffic.Data["123.123.123.123"]
+	if !ok {
+		t.Fatal("expected Data to contain IP '123.123.123.123'")
+	}
+	if stats.In != 0.2874 {
+		t.Errorf("expected In 0.2874, got %v", stats.In)
+	}
+	if stats.Out != 0.0481 {
+		t.Errorf("expected Out 0.0481, got %v", stats.Out)
+	}
+	if stats.Sum != 0.3355 {
+		t.Errorf("expected Sum 0.3355, got %v", stats.Sum)
 	}
 }

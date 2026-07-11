@@ -2,6 +2,7 @@ package hrobot
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
 )
 
@@ -27,10 +28,16 @@ const (
 
 // ServerTrafficData represents traffic statistics for a server.
 type ServerTrafficData struct {
-	Type string                             `json:"type"`
-	From string                             `json:"from"`
-	To   string                             `json:"to"`
-	Data map[string]map[string]TrafficStats `json:"data"` // IP -> Date -> Traffic
+	Type string `json:"type"`
+	From string `json:"from"`
+	To   string `json:"to"`
+	// Data holds the aggregate traffic per IP (GB), populated when the
+	// request did not set SingleValues.
+	Data map[string]TrafficStats
+	// SingleValues holds per-interval traffic per IP (GB), keyed by
+	// interval (e.g. date), populated when the request set
+	// SingleValues to true.
+	SingleValues map[string]map[string]TrafficStats
 }
 
 // TrafficStats represents traffic statistics for a specific time period.
@@ -53,7 +60,7 @@ type TrafficGetParams struct {
 //
 // POST /traffic
 //
-// See: https://robot.hetzner.com/doc/webservice/en.html#get-traffic
+// See: https://robot.hetzner.com/doc/webservice/en.html#post-traffic
 func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*ServerTrafficData, error) {
 	path := "/traffic"
 
@@ -69,9 +76,36 @@ func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*Ser
 		formData.Set("single_values", "true")
 	}
 
-	var result ServerTrafficData
-	if err := t.client.Post(ctx, path, formData, &result); err != nil {
+	// The shape of the "data" field depends on whether single_values was
+	// requested: an aggregate per IP by default, or per-interval values
+	// per IP with single_values=true. Decode it separately based on which
+	// mode was requested.
+	var raw struct {
+		Type string          `json:"type"`
+		From string          `json:"from"`
+		To   string          `json:"to"`
+		Data json.RawMessage `json:"data"`
+	}
+	if err := t.client.Post(ctx, path, formData, &raw); err != nil {
 		return nil, err
+	}
+
+	result := ServerTrafficData{
+		Type: raw.Type,
+		From: raw.From,
+		To:   raw.To,
+	}
+
+	if len(raw.Data) > 0 {
+		if params.SingleValues {
+			if err := json.Unmarshal(raw.Data, &result.SingleValues); err != nil {
+				return nil, NewParseError("failed to decode traffic single_values data", err)
+			}
+		} else {
+			if err := json.Unmarshal(raw.Data, &result.Data); err != nil {
+				return nil, NewParseError("failed to decode traffic data", err)
+			}
+		}
 	}
 
 	return &result, nil
