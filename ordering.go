@@ -340,11 +340,10 @@ type MarketProduct struct {
 
 // AddonProduct represents an addon product available for order.
 type AddonProduct struct {
-	ID     string       `json:"id"`
-	Name   string       `json:"name"`
-	Min    uint32       `json:"min"`
-	Max    uint32       `json:"max"`
-	Prices []AddonPrice `json:"prices"`
+	ID    string     `json:"id"`
+	Name  string     `json:"name"`
+	Type  string     `json:"type"`
+	Price AddonPrice `json:"price"`
 }
 
 // ListMarketProducts retrieves all servers available on the auction market.
@@ -397,9 +396,9 @@ func (o *OrderingService) GetTransaction(ctx context.Context, transactionID stri
 
 // ListAddonProducts retrieves all addon products available for a server.
 //
-// GET /order/server_addon/product.
+// GET /order/server_addon/{server-number}/product.
 func (o *OrderingService) ListAddonProducts(ctx context.Context, serverNumber int) ([]AddonProduct, error) {
-	path := fmt.Sprintf("/order/server_addon/product?server_number=%d", serverNumber)
+	path := fmt.Sprintf("/order/server_addon/%d/product", serverNumber)
 	var result []AddonProduct
 	if err := o.client.GetWrappedList(ctx, path, "server_addon_product", &result); err != nil {
 		return nil, err
