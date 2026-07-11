@@ -452,3 +452,85 @@ func TestVSwitchService_IntegerConversion(t *testing.T) {
 		})
 	}
 }
+
+func TestVSwitchService_WaitForVSwitchReady(t *testing.T) {
+	tests := []struct {
+		name          string
+		status        string
+		shouldError   bool
+		errorContains string
+	}{
+		{
+			name:        "all servers ready",
+			status:      "ready",
+			shouldError: false,
+		},
+		{
+			name:          "server failed",
+			status:        "failed",
+			shouldError:   true,
+			errorContains: "is in status failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/vswitch/12345" && r.Method == "GET" {
+					callCount++
+					response := map[string]any{
+						"vswitch": map[string]any{
+							"id":        12345,
+							"name":      "test-vswitch",
+							"vlan":      4000,
+							"cancelled": false,
+							"server": []map[string]any{
+								{
+									"server_ip":     "123.123.123.123",
+									"server_number": 321,
+									"status":        tt.status,
+								},
+							},
+						},
+					}
+					_ = json.NewEncoder(w).Encode(response)
+				}
+			}))
+			defer server.Close()
+
+			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+			ctx := context.Background()
+
+			err := client.VSwitch.WaitForVSwitchReady(ctx, 12345)
+
+			if tt.shouldError {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				}
+				if tt.errorContains != "" && err != nil {
+					if !contains(err.Error(), tt.errorContains) {
+						t.Errorf("expected error to contain '%s', got '%s'", tt.errorContains, err.Error())
+					}
+				}
+				// Verify that we fail fast (should only call Get once for failed status)
+				if tt.status == "failed" && callCount != 1 {
+					t.Errorf("expected 1 Get call for failed status, got %d", callCount)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("expected no error, got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func contains(s, substr string) bool {
+	for i := 0; i < len(s)-len(substr)+1; i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}
