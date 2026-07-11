@@ -19,30 +19,36 @@ func TestIPService_List(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]any{
+		body := `[
 			{
-				"ip":               "123.123.123.123",
-				"server_ip":        "123.123.123.123",
-				"server_number":    321,
-				"locked":           false,
-				"traffic_warnings": true,
-				"traffic_hourly":   1000,
-				"traffic_daily":    50000,
-				"traffic_monthly":  1000000,
+				"ip": {
+					"ip": "123.123.123.123",
+					"server_ip": "123.123.123.123",
+					"server_number": 321,
+					"locked": false,
+					"separate_mac": null,
+					"traffic_warnings": false,
+					"traffic_hourly": 50,
+					"traffic_daily": 50,
+					"traffic_monthly": 8
+				}
 			},
 			{
-				"ip":               "124.124.124.124",
-				"server_ip":        "124.124.124.124",
-				"server_number":    456,
-				"locked":           false,
-				"traffic_warnings": false,
-				"traffic_hourly":   2000,
-				"traffic_daily":    60000,
-				"traffic_monthly":  1500000,
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+				"ip": {
+					"ip": "124.124.124.124",
+					"server_ip": "123.123.123.123",
+					"server_number": 321,
+					"locked": false,
+					"separate_mac": null,
+					"traffic_warnings": false,
+					"traffic_hourly": 200,
+					"traffic_daily": 2000,
+					"traffic_monthly": 20
+				}
+			}
+		]`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -59,16 +65,32 @@ func TestIPService_List(t *testing.T) {
 		t.Errorf("expected 2 IPs, got %d", len(ips))
 	}
 
+	if ips[0].IP.String() != "123.123.123.123" {
+		t.Errorf("expected ip '123.123.123.123', got '%s'", ips[0].IP.String())
+	}
+
 	if ips[0].ServerNumber != 321 {
 		t.Errorf("expected server number 321, got %d", ips[0].ServerNumber)
 	}
 
-	if !ips[0].TrafficWarnings {
-		t.Error("expected traffic warnings to be enabled")
+	if ips[0].TrafficWarnings {
+		t.Error("expected traffic warnings to be disabled")
+	}
+
+	if ips[0].TrafficHourly != 50 || ips[0].TrafficDaily != 50 || ips[0].TrafficMonthly != 8 {
+		t.Errorf("unexpected traffic limits for ips[0]: %+v", ips[0])
+	}
+
+	if ips[1].IP.String() != "124.124.124.124" {
+		t.Errorf("expected ip '124.124.124.124', got '%s'", ips[1].IP.String())
 	}
 
 	if ips[1].TrafficWarnings {
 		t.Error("expected traffic warnings to be disabled")
+	}
+
+	if ips[1].TrafficHourly != 200 || ips[1].TrafficDaily != 2000 || ips[1].TrafficMonthly != 20 {
+		t.Errorf("unexpected traffic limits for ips[1]: %+v", ips[1])
 	}
 }
 
@@ -81,21 +103,24 @@ func TestIPService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]any{
-			"ip": map[string]any{
-				"ip":               "123.123.123.123",
-				"server_ip":        "123.123.123.123",
-				"server_number":    321,
-				"locked":           false,
-				"separate_mac":     "00:50:56:00:00:01",
-				"traffic_warnings": true,
-				"traffic_hourly":   1000,
-				"traffic_daily":    50000,
-				"traffic_monthly":  1000000,
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+		body := `{
+			"ip": {
+				"ip": "123.123.123.123",
+				"gateway": "123.123.123.97",
+				"mask": 27,
+				"broadcast": "123.123.123.127",
+				"server_ip": "123.123.123.123",
+				"server_number": 321,
+				"locked": false,
+				"separate_mac": null,
+				"traffic_warnings": false,
+				"traffic_hourly": 50,
+				"traffic_daily": 50,
+				"traffic_monthly": 8
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -109,16 +134,24 @@ func TestIPService_Get(t *testing.T) {
 		t.Fatalf("IP.Get returned error: %v", err)
 	}
 
+	if ipAddr.IP.String() != "123.123.123.123" {
+		t.Errorf("expected ip '123.123.123.123', got '%s'", ipAddr.IP.String())
+	}
+
 	if ipAddr.ServerNumber != 321 {
 		t.Errorf("expected server number 321, got %d", ipAddr.ServerNumber)
 	}
 
-	if ipAddr.SeparateMac != "00:50:56:00:00:01" {
-		t.Errorf("expected separate_mac '00:50:56:00:00:01', got '%s'", ipAddr.SeparateMac)
+	if ipAddr.SeparateMac != "" {
+		t.Errorf("expected separate_mac to be empty, got '%s'", ipAddr.SeparateMac)
 	}
 
-	if !ipAddr.TrafficWarnings {
-		t.Error("expected traffic warnings to be enabled")
+	if ipAddr.TrafficWarnings {
+		t.Error("expected traffic warnings to be disabled")
+	}
+
+	if ipAddr.TrafficHourly != 50 || ipAddr.TrafficDaily != 50 || ipAddr.TrafficMonthly != 8 {
+		t.Errorf("unexpected traffic limits: %+v", ipAddr)
 	}
 }
 
@@ -402,7 +435,15 @@ func TestIPService_DeleteMAC(t *testing.T) {
 		if r.Method != "DELETE" {
 			t.Errorf("expected DELETE, got '%s'", r.Method)
 		}
-		w.WriteHeader(http.StatusOK)
+		body := `{
+			"mac": {
+				"ip": "123.123.123.123",
+				"mac": null
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 

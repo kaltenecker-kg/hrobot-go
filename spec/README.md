@@ -37,8 +37,8 @@ the way.
 | subnet        | unverified |                                                                        |
 | reset         | unverified |                                                                        |
 | boot          | unverified | Gist lacks linux/vnc/windows boot paths per the issue plan.            |
-| firewall      | unverified | Gist lacks `firewall/template/{id}`; rule body validated out-of-band (see `internal/spectest`, known exception). |
-| vswitch       | unverified |                                                                        |
+| firewall      | partially verified | `/firewall/{server-id}` GET/POST/DELETE and `/firewall/template` GET/POST checked against the doc and wrapped with `spectest.Handler`; see "firewall tag fixes" below. Gist still lacks `firewall/template/{id}`, so those tests remain unwrapped; rule body validated out-of-band (see `internal/spectest`, known exception). |
+| vswitch       | verified   | See "vswitch tag fixes" below.                                        |
 | rdns          | unverified |                                                                        |
 | failover      | unverified |                                                                        |
 | wol           | unverified |                                                                        |
@@ -73,3 +73,51 @@ Confirmed already correct (no change needed): list/single response envelopes
 (`[{"server": {...}}]` / `{"server": {...}}`), `traffic` as a human-readable
 string (`"5 TB"`, `"unlimited"`), `server_ipv6_net` presence, and `subnet`
 nullability.
+
+### vswitch tag fixes
+
+Verified against the doc's `vSwitch` section (`GET /vswitch`,
+`GET|POST /vswitch/{vswitch-id}`, `DELETE /vswitch/{vswitch-id}`,
+`POST|DELETE /vswitch/{vswitch-id}/server`). No `spec/robot.yaml` schema
+changes were needed — `VSwitchDetailed`/`VSwitchBasic` already modeled the
+doc's top-level unwrapped response shape correctly; the bug was in the test
+fixtures (`vswitch_test.go` previously wrapped responses in a spurious
+`{"vswitch": {...}}` envelope the API never sends). `internal/client.go`'s
+generic single-key envelope unwrapping masked the fixture bug, since it
+leaves top-level objects with an `id` key untouched either way.
+
+New known exception (analogous to the firewall bracket-key one): the Robot
+API encodes `POST|DELETE /vswitch/{vswitch-id}/server` request bodies as
+repeated `server[]=<ip>` form keys, which OpenAPI 3 form-urlencoded
+serialization rules cannot express as a schema. `internal/spectest/vswitch.go`
+validates this by hand (`validateVSwitchServerForm`), following the same
+pattern as `internal/spectest/firewall.go`.
+
+A real production bug was found and fixed independently of the spec:
+`vswitch.go`'s `VSwitchServerStatusProcessing` constant was `"processing"`;
+the doc documents the value as `"in process"` (matching the sibling
+`FirewallStatusInProcess` constant already in the codebase).
+
+### firewall tag fixes
+
+Verified against the doc's `Firewall` section for the paths the vendored gist
+covers: `GET|POST|DELETE /firewall/{server-id}` and
+`GET|POST /firewall/template`. Fix made to the spec:
+
+- `components.schemas.FirewallRule.properties.ip_version` was a non-nullable
+  enum (`ipv4`/`ipv6`), but the doc's own `GET /firewall/{server-id}` example
+  response sends `"ip_version": null` for rules that omit it ("Omitted rule
+  fields will have the value 'null' and will act like a wildcard" — doc
+  text). Added `nullable: true` to match.
+
+Also fixed in test fixtures (not the spec): `GET /firewall/template` was
+served as a bare JSON array instead of the doc's `[{"firewall_template":
+{...}}, ...]` envelope, and the apply-template response
+(`POST /firewall/{server-id}?template_id=...`) was served unenveloped instead
+of `{"firewall": {...}}`.
+
+`GET /firewall/template/{template-id}`, `POST /firewall/template/{template-id}`,
+and `DELETE /firewall/template/{template-id}` remain unverified against the
+spec (not wrapped with `spectest.Handler`) because the vendored gist has no
+path for `firewall/template/{id}`; their fixtures were still corrected
+against the doc text directly.

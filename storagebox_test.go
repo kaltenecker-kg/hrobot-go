@@ -8,6 +8,25 @@ import (
 	"testing"
 )
 
+// storageBoxListFixture mirrors the abridged example from the doc's
+// GET /storagebox response, which omits the detail-only fields (disk
+// usage/webdav/samba/ssh/etc) that only appear on GET/POST /storagebox/{id}.
+func storageBoxListFixture() map[string]any {
+	return map[string]any{
+		"storagebox": map[string]any{
+			"id":            123456,
+			"login":         "u12345",
+			"name":          "Backup Server 1",
+			"product":       "BX60",
+			"cancelled":     false,
+			"locked":        false,
+			"location":      "FSN1",
+			"linked_server": 123456,
+			"paid_until":    "2015-10-23",
+		},
+	}
+}
+
 func storageBoxFixture() map[string]any {
 	return map[string]any{
 		"storagebox": map[string]any{
@@ -43,7 +62,7 @@ func TestStorageBoxService_List(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]any{storageBoxFixture()})
+		_ = json.NewEncoder(w).Encode([]map[string]any{storageBoxListFixture()})
 	}))
 	defer server.Close()
 

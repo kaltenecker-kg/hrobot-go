@@ -2889,6 +2889,7 @@ components:
         ip_version:
           type: string
           enum: [ipv4, ipv6]
+          nullable: true
           description: Internet protocol version
         name:
           type: string

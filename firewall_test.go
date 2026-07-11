@@ -7,10 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestFirewallService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
@@ -18,31 +21,50 @@ func TestFirewallService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
+		// Fixture matches the doc's GET /firewall/{server-id} example
+		// response verbatim, including explicit nulls for unset rule fields.
 		response := map[string]any{
 			"firewall": map[string]any{
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
+				"filter_ipv6":   false,
 				"whitelist_hos": true,
 				"port":          "main",
 				"rules": map[string]any{
 					"input": []map[string]any{
 						{
-							"name":       "allow ssh",
 							"ip_version": "ipv4",
+							"name":       "rule 1",
+							"dst_ip":     nil,
+							"src_ip":     "1.1.1.1",
+							"dst_port":   "80",
+							"src_port":   nil,
+							"protocol":   nil,
+							"tcp_flags":  nil,
 							"action":     "accept",
-							"protocol":   "tcp",
-							"dst_port":   "22",
 						},
 					},
-					"output": []map[string]any{},
+					"output": []map[string]any{
+						{
+							"ip_version": nil,
+							"name":       "Allow all",
+							"dst_ip":     nil,
+							"src_ip":     nil,
+							"dst_port":   nil,
+							"src_port":   nil,
+							"protocol":   nil,
+							"tcp_flags":  nil,
+							"action":     "accept",
+						},
+					},
 				},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -69,8 +91,16 @@ func TestFirewallService_Get(t *testing.T) {
 		t.Errorf("expected 1 input rule, got %d", len(config.Rules.Input))
 	}
 
-	if config.Rules.Input[0].Name != "allow ssh" {
-		t.Errorf("expected rule name 'allow ssh', got '%s'", config.Rules.Input[0].Name)
+	if config.Rules.Input[0].Name != "rule 1" {
+		t.Errorf("expected rule name 'rule 1', got '%s'", config.Rules.Input[0].Name)
+	}
+
+	if config.Rules.Input[0].SourceIP != "1.1.1.1" {
+		t.Errorf("expected rule src_ip '1.1.1.1', got '%s'", config.Rules.Input[0].SourceIP)
+	}
+
+	if len(config.Rules.Output) != 1 {
+		t.Errorf("expected 1 output rule, got %d", len(config.Rules.Output))
 	}
 }
 
@@ -113,7 +143,8 @@ func TestFirewallService_Activate(t *testing.T) {
 	getCalled := false
 	postCalled := false
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
@@ -150,6 +181,9 @@ func TestFirewallService_Activate(t *testing.T) {
 			if r.FormValue("whitelist_hos") != "true" {
 				t.Errorf("expected whitelist_hos 'true', got '%s'", r.FormValue("whitelist_hos"))
 			}
+			if r.FormValue("filter_ipv6") != "false" {
+				t.Errorf("expected filter_ipv6 'false', got '%s'", r.FormValue("filter_ipv6"))
+			}
 
 			docRules := firewallDocRules()
 			for i, rule := range docRules {
@@ -162,6 +196,7 @@ func TestFirewallService_Activate(t *testing.T) {
 					"server_number": 321,
 					"status":        "active",
 					"whitelist_hos": true,
+					"filter_ipv6":   false,
 					"port":          "main",
 					"rules": map[string]any{
 						"input":  firewallDocRules(),
@@ -175,7 +210,7 @@ func TestFirewallService_Activate(t *testing.T) {
 		default:
 			t.Errorf("expected GET or POST request, got '%s'", r.Method)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -206,7 +241,8 @@ func TestFirewallService_Disable(t *testing.T) {
 	getCalled := false
 	postCalled := false
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
@@ -243,6 +279,9 @@ func TestFirewallService_Disable(t *testing.T) {
 			if r.FormValue("whitelist_hos") != "true" {
 				t.Errorf("expected whitelist_hos 'true', got '%s'", r.FormValue("whitelist_hos"))
 			}
+			if r.FormValue("filter_ipv6") != "false" {
+				t.Errorf("expected filter_ipv6 'false', got '%s'", r.FormValue("filter_ipv6"))
+			}
 
 			docRules := firewallDocRules()
 			for i, rule := range docRules {
@@ -255,6 +294,7 @@ func TestFirewallService_Disable(t *testing.T) {
 					"server_number": 321,
 					"status":        "disabled",
 					"whitelist_hos": true,
+					"filter_ipv6":   false,
 					"port":          "main",
 					"rules": map[string]any{
 						"input":  firewallDocRules(),
@@ -268,7 +308,7 @@ func TestFirewallService_Disable(t *testing.T) {
 		default:
 			t.Errorf("expected GET or POST request, got '%s'", r.Method)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -296,7 +336,8 @@ func TestFirewallService_Disable(t *testing.T) {
 }
 
 func TestFirewallService_Delete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
@@ -304,8 +345,24 @@ func TestFirewallService_Delete(t *testing.T) {
 			t.Errorf("expected DELETE request, got '%s'", r.Method)
 		}
 
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Fixture matches the doc's DELETE /firewall/{server-id} example
+		// response verbatim: status flips to "in process" and rules is an
+		// empty object (not {"input":[],"output":[]}).
+		response := map[string]any{
+			"firewall": map[string]any{
+				"server_ip":     "123.123.123.123",
+				"server_number": 321,
+				"status":        "in process",
+				"filter_ipv6":   false,
+				"whitelist_hos": true,
+				"port":          "main",
+				"rules":         map[string]any{},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -318,7 +375,8 @@ func TestFirewallService_Delete(t *testing.T) {
 }
 
 func TestFirewallService_Update(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
@@ -365,6 +423,7 @@ func TestFirewallService_Update(t *testing.T) {
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "active",
+				"filter_ipv6":   false,
 				"whitelist_hos": true,
 				"port":          "main",
 				"rules": map[string]any{
@@ -384,7 +443,7 @@ func TestFirewallService_Update(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -456,10 +515,11 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			callCount := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/firewall/321" {
 					t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 				}
@@ -479,6 +539,7 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 						"server_ip":     "123.123.123.123",
 						"server_number": 321,
 						"status":        status,
+						"filter_ipv6":   false,
 						"whitelist_hos": true,
 						"port":          "main",
 						"rules": map[string]any{
@@ -490,7 +551,7 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -509,6 +570,9 @@ func TestFirewallService_WaitForFirewallReady(t *testing.T) {
 }
 
 func TestFirewallService_WaitForFirewallReady_Timeout(t *testing.T) {
+	// Not wrapped with spectest.Handler: the context timeout is 1ns, so the
+	// request may be cancelled mid-flight; wrapping would add flakiness
+	// without exercising anything spec-fidelity related.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		// Always return "in process" status
 		response := map[string]any{
@@ -516,6 +580,7 @@ func TestFirewallService_WaitForFirewallReady_Timeout(t *testing.T) {
 				"server_ip":     "123.123.123.123",
 				"server_number": 321,
 				"status":        "in process",
+				"filter_ipv6":   false,
 				"whitelist_hos": true,
 				"port":          "main",
 				"rules": map[string]any{
@@ -541,7 +606,8 @@ func TestFirewallService_WaitForFirewallReady_Timeout(t *testing.T) {
 }
 
 func TestFirewallService_ListTemplates(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/template" {
 			t.Errorf("expected path '/firewall/template', got '%s'", r.URL.Path)
 		}
@@ -549,34 +615,34 @@ func TestFirewallService_ListTemplates(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
+		// Fixture matches the doc's GET /firewall/template example response
+		// verbatim: an array of {"firewall_template": {...}} wrappers. The
+		// doc's list example omits "rules" (only the detailed GET/POST
+		// responses include it), so it is abridged here too.
 		response := []map[string]any{
 			{
-				"id":            1,
-				"name":          "default",
-				"filter_ipv6":   false,
-				"whitelist_hos": true,
-				"is_default":    true,
-				"rules": map[string]any{
-					"input":  []map[string]any{},
-					"output": []map[string]any{},
+				"firewall_template": map[string]any{
+					"id":            1,
+					"name":          "My template",
+					"filter_ipv6":   false,
+					"whitelist_hos": true,
+					"is_default":    true,
 				},
 			},
 			{
-				"id":            2,
-				"name":          "strict",
-				"filter_ipv6":   true,
-				"whitelist_hos": false,
-				"is_default":    false,
-				"rules": map[string]any{
-					"input":  []map[string]any{},
-					"output": []map[string]any{},
+				"firewall_template": map[string]any{
+					"id":            2,
+					"name":          "My second template",
+					"filter_ipv6":   false,
+					"whitelist_hos": true,
+					"is_default":    false,
 				},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -591,33 +657,77 @@ func TestFirewallService_ListTemplates(t *testing.T) {
 		t.Fatalf("expected 2 templates, got %d", len(templates))
 	}
 
-	if templates[0].Name != "default" {
-		t.Errorf("expected name 'default', got '%s'", templates[0].Name)
+	if templates[0].Name != "My template" {
+		t.Errorf("expected name 'My template', got '%s'", templates[0].Name)
 	}
 	if !templates[0].IsDefault {
 		t.Error("expected first template to be default")
 	}
+	if templates[1].Name != "My second template" {
+		t.Errorf("expected name 'My second template', got '%s'", templates[1].Name)
+	}
+	if templates[1].IsDefault {
+		t.Error("expected second template not to be default")
+	}
 }
 
 func TestFirewallService_GetTemplate(t *testing.T) {
+	// Not wrapped with spectest.Handler: spec/robot.yaml lacks a
+	// /firewall/template/{template-id} path (see spec/README.md).
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/firewall/template/1" {
-			t.Errorf("expected path '/firewall/template/1', got '%s'", r.URL.Path)
+		if r.URL.Path != "/firewall/template/123" {
+			t.Errorf("expected path '/firewall/template/123', got '%s'", r.URL.Path)
 		}
 		if r.Method != "GET" {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
+		// Fixture matches the doc's GET /firewall/template/{template-id}
+		// example response verbatim.
 		response := map[string]any{
 			"firewall_template": map[string]any{
-				"id":            1,
-				"name":          "default",
+				"id":            123,
 				"filter_ipv6":   false,
 				"whitelist_hos": true,
-				"is_default":    true,
+				"is_default":    false,
 				"rules": map[string]any{
-					"input":  []map[string]any{},
-					"output": []map[string]any{},
+					"input": []map[string]any{
+						{
+							"ip_version": "ipv4",
+							"name":       "rule 1",
+							"dst_ip":     nil,
+							"src_ip":     "1.1.1.1",
+							"dst_port":   "80",
+							"src_port":   nil,
+							"protocol":   nil,
+							"tcp_flags":  nil,
+							"action":     "accept",
+						},
+						{
+							"ip_version": "ipv4",
+							"name":       "Allow MySQL",
+							"dst_ip":     nil,
+							"src_ip":     nil,
+							"dst_port":   "3306",
+							"src_port":   nil,
+							"protocol":   nil,
+							"tcp_flags":  nil,
+							"action":     "accept",
+						},
+					},
+					"output": []map[string]any{
+						{
+							"ip_version": nil,
+							"name":       "Allow all",
+							"dst_ip":     nil,
+							"src_ip":     nil,
+							"dst_port":   nil,
+							"src_port":   nil,
+							"protocol":   nil,
+							"tcp_flags":  nil,
+							"action":     "accept",
+						},
+					},
 				},
 			},
 		}
@@ -630,21 +740,28 @@ func TestFirewallService_GetTemplate(t *testing.T) {
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	ctx := context.Background()
 
-	tmpl, err := client.Firewall.GetTemplate(ctx, "1")
+	tmpl, err := client.Firewall.GetTemplate(ctx, "123")
 	if err != nil {
 		t.Fatalf("Firewall.GetTemplate returned error: %v", err)
 	}
 
-	if tmpl.ID != 1 {
-		t.Errorf("expected id 1, got %d", tmpl.ID)
+	if tmpl.ID != 123 {
+		t.Errorf("expected id 123, got %d", tmpl.ID)
 	}
-	if tmpl.Name != "default" {
-		t.Errorf("expected name 'default', got '%s'", tmpl.Name)
+	if len(tmpl.Rules.Input) != 2 {
+		t.Errorf("expected 2 input rules, got %d", len(tmpl.Rules.Input))
+	}
+	if tmpl.Rules.Input[0].SourceIP != "1.1.1.1" {
+		t.Errorf("expected rule src_ip '1.1.1.1', got '%s'", tmpl.Rules.Input[0].SourceIP)
+	}
+	if len(tmpl.Rules.Output) != 1 {
+		t.Errorf("expected 1 output rule, got %d", len(tmpl.Rules.Output))
 	}
 }
 
 func TestFirewallService_CreateTemplate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/template" {
 			t.Errorf("expected path '/firewall/template', got '%s'", r.URL.Path)
 		}
@@ -669,6 +786,15 @@ func TestFirewallService_CreateTemplate(t *testing.T) {
 			t.Errorf("expected is_default 'false', got '%s'", r.FormValue("is_default"))
 		}
 
+		wantRule := map[string]any{
+			"name":       "rule 1",
+			"ip_version": "ipv4",
+			"action":     "accept",
+			"src_ip":     "1.1.1.1",
+			"dst_port":   "80",
+		}
+		assertInputRuleForm(t, r, 0, wantRule)
+
 		response := map[string]any{
 			"firewall_template": map[string]any{
 				"id":            7,
@@ -677,7 +803,19 @@ func TestFirewallService_CreateTemplate(t *testing.T) {
 				"whitelist_hos": true,
 				"is_default":    false,
 				"rules": map[string]any{
-					"input":  []map[string]any{},
+					"input": []map[string]any{
+						{
+							"ip_version": "ipv4",
+							"name":       "rule 1",
+							"dst_ip":     nil,
+							"src_ip":     "1.1.1.1",
+							"dst_port":   "80",
+							"src_port":   nil,
+							"protocol":   nil,
+							"tcp_flags":  nil,
+							"action":     "accept",
+						},
+					},
 					"output": []map[string]any{},
 				},
 			},
@@ -685,7 +823,7 @@ func TestFirewallService_CreateTemplate(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -697,7 +835,15 @@ func TestFirewallService_CreateTemplate(t *testing.T) {
 		WhitelistHOS: true,
 		IsDefault:    false,
 		Rules: FirewallRules{
-			Input:  []FirewallRule{},
+			Input: []FirewallRule{
+				{
+					Name:      "rule 1",
+					IPVersion: IPv4,
+					Action:    ActionAccept,
+					SourceIP:  "1.1.1.1",
+					DestPort:  "80",
+				},
+			},
 			Output: []FirewallRule{},
 		},
 	})
@@ -711,9 +857,14 @@ func TestFirewallService_CreateTemplate(t *testing.T) {
 	if tmpl.Name != "my-template" {
 		t.Errorf("expected name 'my-template', got '%s'", tmpl.Name)
 	}
+	if len(tmpl.Rules.Input) != 1 {
+		t.Errorf("expected 1 input rule, got %d", len(tmpl.Rules.Input))
+	}
 }
 
 func TestFirewallService_UpdateTemplate(t *testing.T) {
+	// Not wrapped with spectest.Handler: spec/robot.yaml lacks a
+	// /firewall/template/{template-id} path (see spec/README.md).
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/template/7" {
 			t.Errorf("expected path '/firewall/template/7', got '%s'", r.URL.Path)
@@ -739,6 +890,15 @@ func TestFirewallService_UpdateTemplate(t *testing.T) {
 			t.Errorf("expected is_default 'true', got '%s'", r.FormValue("is_default"))
 		}
 
+		wantRule := map[string]any{
+			"name":       "Allow HTTPS",
+			"ip_version": "ipv4",
+			"action":     "accept",
+			"protocol":   "tcp",
+			"dst_port":   "443",
+		}
+		assertInputRuleForm(t, r, 0, wantRule)
+
 		response := map[string]any{
 			"firewall_template": map[string]any{
 				"id":            7,
@@ -747,7 +907,19 @@ func TestFirewallService_UpdateTemplate(t *testing.T) {
 				"whitelist_hos": false,
 				"is_default":    true,
 				"rules": map[string]any{
-					"input":  []map[string]any{},
+					"input": []map[string]any{
+						{
+							"ip_version": "ipv4",
+							"name":       "Allow HTTPS",
+							"dst_ip":     nil,
+							"src_ip":     nil,
+							"dst_port":   "443",
+							"src_port":   nil,
+							"protocol":   "tcp",
+							"tcp_flags":  nil,
+							"action":     "accept",
+						},
+					},
 					"output": []map[string]any{},
 				},
 			},
@@ -765,7 +937,15 @@ func TestFirewallService_UpdateTemplate(t *testing.T) {
 		Name:      "renamed",
 		IsDefault: true,
 		Rules: FirewallRules{
-			Input:  []FirewallRule{},
+			Input: []FirewallRule{
+				{
+					Name:      "Allow HTTPS",
+					IPVersion: IPv4,
+					Action:    ActionAccept,
+					Protocol:  ProtocolTCP,
+					DestPort:  "443",
+				},
+			},
 			Output: []FirewallRule{},
 		},
 	})
@@ -779,9 +959,16 @@ func TestFirewallService_UpdateTemplate(t *testing.T) {
 	if !tmpl.IsDefault {
 		t.Error("expected template to be default")
 	}
+	if len(tmpl.Rules.Input) != 1 {
+		t.Errorf("expected 1 input rule, got %d", len(tmpl.Rules.Input))
+	}
 }
 
 func TestFirewallService_DeleteTemplate(t *testing.T) {
+	// Not wrapped with spectest.Handler: spec/robot.yaml lacks a
+	// /firewall/template/{template-id} path (see spec/README.md).
+	// The doc documents "No output" for this endpoint, so an empty 200
+	// body is correct as-is.
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/template/7" {
 			t.Errorf("expected path '/firewall/template/7', got '%s'", r.URL.Path)
@@ -803,7 +990,8 @@ func TestFirewallService_DeleteTemplate(t *testing.T) {
 }
 
 func TestFirewallService_ApplyTemplate(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
@@ -819,21 +1007,27 @@ func TestFirewallService_ApplyTemplate(t *testing.T) {
 			t.Errorf("expected template_id '7', got '%s'", r.FormValue("template_id"))
 		}
 
+		// ApplyTemplate posts to POST /firewall/{server-id}, the same
+		// operation as Activate/Disable/Update, so the response uses the
+		// same {"firewall": {...}} envelope as the doc's POST example.
 		response := map[string]any{
-			"server_ip":     "123.123.123.123",
-			"server_number": 321,
-			"status":        "active",
-			"whitelist_hos": true,
-			"port":          "main",
-			"rules": map[string]any{
-				"input":  []map[string]any{},
-				"output": []map[string]any{},
+			"firewall": map[string]any{
+				"server_ip":     "123.123.123.123",
+				"server_number": 321,
+				"status":        "active",
+				"filter_ipv6":   false,
+				"whitelist_hos": true,
+				"port":          "main",
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
+				},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

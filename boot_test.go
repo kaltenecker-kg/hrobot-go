@@ -18,26 +18,60 @@ func TestBootService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
+		// Verbatim from the doc's example response body for
+		// "Boot configuration GET /boot/{server-number}". The doc's plain-text
+		// dump renders the deprecated arch field's key as "@deprecated arch",
+		// but that is the doc tool's deprecation annotation leaking into the
+		// example text, not a real JSON key — the real API (and boot.go's
+		// `json:"arch"` tag) uses the plain key "arch".
 		response := map[string]any{
 			"boot": map[string]any{
 				"rescue": map[string]any{
-					"server_ip":      "123.123.123.123",
-					"server_number":  321,
-					"active":         false,
-					"os":             []string{"linux", "linuxold", "vkvm"},
-					"arch":           []int{64},
-					"authorized_key": []map[string]any{},
-					"host_key":       []map[string]any{},
+					"server_ip":       "123.123.123.123",
+					"server_ipv6_net": "2a01:4f8:111:4221::",
+					"server_number":   321,
+					"os":              []string{"linux", "vkvm"},
+					"arch":            []int{64, 32},
+					"active":          false,
+					"password":        nil,
+					"authorized_key":  []map[string]any{},
+					"host_key":        []map[string]any{},
 				},
 				"linux": map[string]any{
-					"server_ip":      "123.123.123.123",
-					"server_number":  321,
-					"dist":           []string{"Ubuntu 22.04", "Debian 12"},
-					"arch":           []int{64},
-					"lang":           []string{"en"},
-					"active":         false,
-					"authorized_key": []map[string]any{},
-					"host_key":       []map[string]any{},
+					"server_ip":       "123.123.123.123",
+					"server_ipv6_net": "2a01:4f8:111:4221::",
+					"server_number":   321,
+					"dist":            []string{"CentOS 5.5 minimal", "Debian 7.8 minimal"},
+					"arch":            []int{64, 32},
+					"lang":            []string{"en"},
+					"active":          false,
+					"password":        nil,
+					"authorized_key":  []map[string]any{},
+					"host_key":        []map[string]any{},
+				},
+				"vnc": map[string]any{
+					"server_ip":       "123.123.123.123",
+					"server_ipv6_net": "2a01:4f8:111:4221::",
+					"server_number":   321,
+					"dist":            []string{"centOS-5.0", "Fedora-6", "openSUSE-10.2"},
+					"arch":            []int{64, 32},
+					"lang":            []string{"de_DE", "en_US"},
+					"active":          false,
+					"password":        nil,
+				},
+				"windows": map[string]any{
+					"server_ip":       "123.123.123.123",
+					"server_ipv6_net": "2a01:4f8:111:4221::",
+					"server_number":   321,
+					"os": []string{
+						"Windows Server 2022 Standard Edition",
+						"Windows Server 2019 Standard Edition",
+						"Windows Server 2016 Standard Edition",
+					},
+					"dist":     nil,
+					"lang":     nil,
+					"active":   false,
+					"password": nil,
 				},
 			},
 		}
@@ -73,6 +107,30 @@ func TestBootService_Get(t *testing.T) {
 
 	if config.Linux.Active {
 		t.Error("expected linux to be inactive")
+	}
+
+	if config.VNC == nil {
+		t.Fatal("expected VNC config, got nil")
+	}
+
+	if config.VNC.Active {
+		t.Error("expected VNC to be inactive")
+	}
+
+	if config.VNC.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", config.VNC.ServerNumber)
+	}
+
+	if config.Windows == nil {
+		t.Fatal("expected Windows config, got nil")
+	}
+
+	if config.Windows.Active {
+		t.Error("expected windows to be inactive")
+	}
+
+	if config.Windows.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", config.Windows.ServerNumber)
 	}
 }
 
@@ -148,12 +206,13 @@ func TestBootService_ActivateRescue(t *testing.T) {
 				password := "test-password-123"
 				response := map[string]any{
 					"rescue": map[string]any{
-						"server_ip":      "123.123.123.123",
-						"server_number":  321,
-						"active":         true,
-						"os":             tt.os,
-						"arch":           tt.arch,
-						"authorized_key": authorizedKey,
+						"server_ip":       "123.123.123.123",
+						"server_ipv6_net": "2a01:4f8:111:4221::",
+						"server_number":   321,
+						"active":          true,
+						"os":              tt.os,
+						"arch":            tt.arch,
+						"authorized_key":  authorizedKey,
 						"host_key": []map[string]any{
 							{
 								"key": map[string]any{
@@ -245,11 +304,12 @@ func TestBootService_GetLastRescue(t *testing.T) {
 		password := "previous-password-456"
 		response := map[string]any{
 			"rescue": map[string]any{
-				"server_ip":     "123.123.123.123",
-				"server_number": 321,
-				"active":        false,
-				"os":            "linux",
-				"arch":          64,
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"active":          false,
+				"os":              "linux",
+				"arch":            64,
 				"authorized_key": []map[string]any{
 					{
 						"key": map[string]any{
@@ -343,16 +403,57 @@ func TestBootService_ActivateLinux(t *testing.T) {
 					t.Errorf("expected lang '%s', got '%s'", tt.lang, r.FormValue("lang"))
 				}
 
-				w.WriteHeader(http.StatusOK)
+				// authorized_key[] must not be present since no keys were passed.
+				if _, exists := r.Form["authorized_key[]"]; exists {
+					t.Error("expected no authorized_key[] form values")
+				}
+
+				// Verbatim (dist/arch/lang substituted per test case) from the
+				// doc's example response body for
+				// "POST /boot/{server-number}/linux".
+				password := "jEt0dtUvomlyOwRr"
+				response := map[string]any{
+					"linux": map[string]any{
+						"server_ip":       "123.123.123.123",
+						"server_ipv6_net": "2a01:4f8:111:4221::",
+						"server_number":   321,
+						"dist":            tt.dist,
+						"arch":            tt.arch,
+						"lang":            tt.lang,
+						"active":          true,
+						"password":        password,
+						"authorized_key":  []map[string]any{},
+						"host_key":        []map[string]any{},
+					},
+				}
+				if err := json.NewEncoder(w).Encode(response); err != nil {
+					t.Fatalf("failed to encode response: %v", err)
+				}
 			}))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 			ctx := context.Background()
 
-			_, err := client.Boot.ActivateLinux(ctx, ServerID(321), tt.dist, tt.arch, tt.lang, []string{})
+			linux, err := client.Boot.ActivateLinux(ctx, ServerID(321), tt.dist, tt.arch, tt.lang, []string{})
 			if err != nil {
 				t.Fatalf("Boot.ActivateLinux returned error: %v", err)
+			}
+
+			if !linux.Active {
+				t.Error("expected linux to be active")
+			}
+			if linux.ServerNumber != 321 {
+				t.Errorf("expected server number 321, got %d", linux.ServerNumber)
+			}
+			if linux.Password == nil || *linux.Password != "jEt0dtUvomlyOwRr" {
+				t.Errorf("expected password 'jEt0dtUvomlyOwRr', got %v", linux.Password)
+			}
+			if got := linux.ActiveDist(); got != tt.dist {
+				t.Errorf("expected active dist '%s', got '%s'", tt.dist, got)
+			}
+			if got := linux.ActiveLang(); got != tt.lang {
+				t.Errorf("expected active lang '%s', got '%s'", tt.lang, got)
 			}
 		})
 	}
@@ -464,16 +565,19 @@ func TestBootService_ActivateVNC(t *testing.T) {
 		}
 
 		password := "vnc-password"
-		// Multi-field top-level object — the auto-unwrap leaves it alone
-		// and it decodes directly into VNCConfig.
+		// Verbatim (dist/lang substituted) from the doc's example response
+		// body for "POST /boot/{server-number}/vnc".
 		response := map[string]any{
-			"server_ip":     "123.123.123.123",
-			"server_number": 321,
-			"active":        true,
-			"dist":          "Debian 12",
-			"arch":          64,
-			"lang":          "en",
-			"password":      password,
+			"vnc": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"dist":            "Debian 12",
+				"arch":            64,
+				"lang":            "en",
+				"active":          true,
+				"password":        password,
+			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
@@ -531,14 +635,19 @@ func TestBootService_GetLastLinux(t *testing.T) {
 		}
 
 		password := "last-linux-pw"
+		// Verbatim from the doc's example response body for
+		// "GET /boot/{server-number}/linux/last".
 		response := map[string]any{
-			"server_ip":     "123.123.123.123",
-			"server_number": 321,
-			"dist":          "Ubuntu 22.04",
-			"arch":          64,
-			"lang":          "en",
-			"active":        false,
-			"password":      password,
+			"linux": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"dist":            "Ubuntu 22.04",
+				"arch":            64,
+				"lang":            "en",
+				"active":          false,
+				"password":        password,
+			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
@@ -571,11 +680,23 @@ func TestBootService_GetWindows(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
+		// Verbatim from the doc's example response body for
+		// "GET /boot/{server-number}/windows".
 		response := map[string]any{
-			"server_ip":     "123.123.123.123",
-			"server_number": 321,
-			"active":        false,
-			"lang":          []string{"en", "de"},
+			"windows": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"dist":            []string{"standard"},
+				"os": []string{
+					"Windows Server 2022 Standard Edition",
+					"Windows Server 2019 Standard Edition",
+					"Windows Server 2016 Standard Edition",
+				},
+				"lang":     []string{"en", "de"},
+				"active":   false,
+				"password": nil,
+			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
@@ -597,6 +718,12 @@ func TestBootService_GetWindows(t *testing.T) {
 	if windows.Active {
 		t.Error("expected windows to be inactive")
 	}
+	if got := windows.AvailableLangs(); !equalStringSlice(got, []string{"en", "de"}) {
+		t.Errorf("expected available langs ['en', 'de'], got %v", got)
+	}
+	if got := windows.AvailableOS(); len(got) != 3 || got[0] != "Windows Server 2022 Standard Edition" {
+		t.Errorf("expected 3 available OS options starting with 'Windows Server 2022 Standard Edition', got %v", got)
+	}
 }
 
 func TestBootService_ActivateWindows(t *testing.T) {
@@ -615,14 +742,24 @@ func TestBootService_ActivateWindows(t *testing.T) {
 		if r.FormValue("lang") != "en" {
 			t.Errorf("expected lang 'en', got '%s'", r.FormValue("lang"))
 		}
+		if r.FormValue("os") != "Windows Server 2019 Standard Edition" {
+			t.Errorf("expected os 'Windows Server 2019 Standard Edition', got '%s'", r.FormValue("os"))
+		}
 
-		password := "windows-pw"
+		password := "jEt0dtUvomlyOwRr"
+		// Verbatim from the doc's example response body for
+		// "POST /boot/{server-number}/windows".
 		response := map[string]any{
-			"server_ip":     "123.123.123.123",
-			"server_number": 321,
-			"active":        true,
-			"lang":          "en",
-			"password":      password,
+			"windows": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"dist":            "standard",
+				"os":              "Windows Server 2019 Standard Edition",
+				"lang":            "en",
+				"active":          true,
+				"password":        password,
+			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
@@ -633,7 +770,7 @@ func TestBootService_ActivateWindows(t *testing.T) {
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	ctx := context.Background()
 
-	windows, err := client.Boot.ActivateWindows(ctx, ServerID(321), "en")
+	windows, err := client.Boot.ActivateWindows(ctx, ServerID(321), "en", "Windows Server 2019 Standard Edition")
 	if err != nil {
 		t.Fatalf("Boot.ActivateWindows returned error: %v", err)
 	}
@@ -641,8 +778,14 @@ func TestBootService_ActivateWindows(t *testing.T) {
 	if !windows.Active {
 		t.Error("expected windows to be active")
 	}
-	if windows.Password == nil || *windows.Password != "windows-pw" {
-		t.Errorf("expected password 'windows-pw', got %v", windows.Password)
+	if windows.Password == nil || *windows.Password != "jEt0dtUvomlyOwRr" {
+		t.Errorf("expected password 'jEt0dtUvomlyOwRr', got %v", windows.Password)
+	}
+	if got := windows.ActiveOS(); got != "Windows Server 2019 Standard Edition" {
+		t.Errorf("expected active OS 'Windows Server 2019 Standard Edition', got '%s'", got)
+	}
+	if got := windows.ActiveLang(); got != "en" {
+		t.Errorf("expected active lang 'en', got '%s'", got)
 	}
 }
 
@@ -684,14 +827,15 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 		password := "test-password"
 		response := map[string]any{
 			"rescue": map[string]any{
-				"server_ip":      "123.123.123.123",
-				"server_number":  321,
-				"active":         true,
-				"os":             "linux",
-				"arch":           64,
-				"authorized_key": []map[string]any{},
-				"host_key":       []map[string]any{},
-				"password":       password,
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"active":          true,
+				"os":              "linux",
+				"arch":            64,
+				"authorized_key":  []map[string]any{},
+				"host_key":        []map[string]any{},
+				"password":        password,
 			},
 		}
 		_ = json.NewEncoder(w).Encode(response)

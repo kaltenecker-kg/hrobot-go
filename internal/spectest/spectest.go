@@ -35,6 +35,17 @@
 // /firewall/{server-id} are therefore excluded from schema-based form body
 // validation; instead validateFirewallForm checks the key grammar by hand
 // (see firewall.go).
+//
+// # Known exception: vSwitch server[] bracket-keys
+//
+// Similarly, the Robot API encodes the vSwitch add/remove-servers "server"
+// array as repeated "server[]=value" form keys (see the doc's POST/DELETE
+// /vswitch/{vswitch-id}/server examples), which OpenAPI 3's
+// form-urlencoded serialization cannot express as a flat "server" array
+// property either. Requests to /vswitch/{vswitch-id}/server are therefore
+// also excluded from schema-based form body validation; instead
+// validateVSwitchServerForm checks the key grammar by hand (see
+// vswitch.go).
 package spectest
 
 import (
@@ -153,9 +164,13 @@ func Handler(t Reporter, spec *Spec, inner http.Handler) http.Handler {
 		}
 
 		isFirewallBody := isFirewallRulesPath(r.URL.Path) && r.Method == http.MethodPost
-		if isFirewallBody {
+		isVSwitchServerBody := isVSwitchServerPath(r.URL.Path) && (r.Method == http.MethodPost || r.Method == http.MethodDelete)
+		switch {
+		case isFirewallBody:
 			validateFirewallForm(t, r.Method, r.URL.Path, bodyBytes)
-		} else {
+		case isVSwitchServerBody:
+			validateVSwitchServerForm(t, r.Method, r.URL.Path, bodyBytes)
+		default:
 			reqInput := &openapi3filter.RequestValidationInput{
 				Request:    r,
 				PathParams: pathParams,

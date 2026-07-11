@@ -17,15 +17,21 @@ func TestResetService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]any{
-			"reset": map[string]any{
-				"server_ip":     "123.123.123.123",
+		body := `{
+			"reset": {
+				"server_ip": "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
 				"server_number": 321,
-				"type":          []string{"sw", "hw", "power"},
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+				"type": [
+					"sw",
+					"hw",
+					"man"
+				],
+				"operating_status": "not supported"
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -42,11 +48,19 @@ func TestResetService_Get(t *testing.T) {
 		t.Errorf("expected server number 321, got %d", reset.ServerNumber)
 	}
 
+	if reset.ServerIPv6Net != "2a01:4f8:111:4221::" {
+		t.Errorf("expected server_ipv6_net '2a01:4f8:111:4221::', got '%s'", reset.ServerIPv6Net)
+	}
+
+	if reset.OperatingStatus != "not supported" {
+		t.Errorf("expected operating_status 'not supported', got '%s'", reset.OperatingStatus)
+	}
+
 	if len(reset.Type) != 3 {
 		t.Errorf("expected 3 reset types, got %d", len(reset.Type))
 	}
 
-	expectedTypes := []ResetType{ResetTypeSoftware, ResetTypeHardware, ResetTypePower}
+	expectedTypes := []ResetType{ResetTypeSoftware, ResetTypeHardware, ResetTypeManual}
 	for i, expectedType := range expectedTypes {
 		if i >= len(reset.Type) || reset.Type[i] != expectedType {
 			t.Errorf("expected reset type %s at index %d, got %s", expectedType, i, reset.Type[i])
@@ -99,15 +113,19 @@ func TestResetService_Execute(t *testing.T) {
 					t.Errorf("expected type '%s', got '%s'", tt.resetType, r.FormValue("type"))
 				}
 
-				response := map[string]any{
-					"reset": map[string]any{
-						"server_ip":     "123.123.123.123",
-						"server_number": 321,
-						"type":          []string{string(tt.resetType)},
-					},
-				}
-				if err := json.NewEncoder(w).Encode(response); err != nil {
-					t.Fatalf("failed to encode response: %v", err)
+				// Doc-verbatim example from POST /reset/{server-number}: the
+				// response's "type" is a single string (the executed reset
+				// option), unlike GET /reset which returns an array of
+				// available options.
+				body := `{
+					"reset": {
+						"server_ip": "123.123.123.123",
+						"server_ipv6_net": "2a01:4f8:111:4221::",
+						"type": "` + string(tt.resetType) + `"
+					}
+				}`
+				if _, err := w.Write([]byte(body)); err != nil {
+					t.Fatalf("failed to write response: %v", err)
 				}
 			}))
 			defer server.Close()
@@ -120,8 +138,12 @@ func TestResetService_Execute(t *testing.T) {
 				t.Fatalf("Reset.Execute returned error: %v", err)
 			}
 
-			if reset.ServerNumber != 321 {
-				t.Errorf("expected server number 321, got %d", reset.ServerNumber)
+			if reset.ServerIP.String() != "123.123.123.123" {
+				t.Errorf("expected server_ip '123.123.123.123', got '%s'", reset.ServerIP.String())
+			}
+
+			if len(reset.Type) != 1 || reset.Type[0] != tt.resetType {
+				t.Errorf("expected type [%s], got %v", tt.resetType, reset.Type)
 			}
 		})
 	}
@@ -144,15 +166,15 @@ func TestResetService_ExecuteSoftware(t *testing.T) {
 			t.Errorf("expected type 'sw', got '%s'", r.FormValue("type"))
 		}
 
-		response := map[string]any{
-			"reset": map[string]any{
-				"server_ip":     "123.123.123.123",
-				"server_number": 321,
-				"type":          []string{"sw"},
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+		body := `{
+			"reset": {
+				"server_ip": "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"type": "sw"
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -165,8 +187,8 @@ func TestResetService_ExecuteSoftware(t *testing.T) {
 		t.Fatalf("Reset.ExecuteSoftware returned error: %v", err)
 	}
 
-	if reset.ServerNumber != 321 {
-		t.Errorf("expected server number 321, got %d", reset.ServerNumber)
+	if len(reset.Type) != 1 || reset.Type[0] != ResetTypeSoftware {
+		t.Errorf("expected type [sw], got %v", reset.Type)
 	}
 }
 
@@ -187,15 +209,15 @@ func TestResetService_ExecuteHardware(t *testing.T) {
 			t.Errorf("expected type 'hw', got '%s'", r.FormValue("type"))
 		}
 
-		response := map[string]any{
-			"reset": map[string]any{
-				"server_ip":     "123.123.123.123",
-				"server_number": 321,
-				"type":          []string{"hw"},
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+		body := `{
+			"reset": {
+				"server_ip": "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"type": "hw"
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -208,8 +230,8 @@ func TestResetService_ExecuteHardware(t *testing.T) {
 		t.Fatalf("Reset.ExecuteHardware returned error: %v", err)
 	}
 
-	if reset.ServerNumber != 321 {
-		t.Errorf("expected server number 321, got %d", reset.ServerNumber)
+	if len(reset.Type) != 1 || reset.Type[0] != ResetTypeHardware {
+		t.Errorf("expected type [hw], got %v", reset.Type)
 	}
 }
 
@@ -230,15 +252,15 @@ func TestResetService_ExecutePower(t *testing.T) {
 			t.Errorf("expected type 'power', got '%s'", r.FormValue("type"))
 		}
 
-		response := map[string]any{
-			"reset": map[string]any{
-				"server_ip":     "123.123.123.123",
-				"server_number": 321,
-				"type":          []string{"power"},
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+		body := `{
+			"reset": {
+				"server_ip": "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"type": "power"
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -251,8 +273,8 @@ func TestResetService_ExecutePower(t *testing.T) {
 		t.Fatalf("Reset.ExecutePower returned error: %v", err)
 	}
 
-	if reset.ServerNumber != 321 {
-		t.Errorf("expected server number 321, got %d", reset.ServerNumber)
+	if len(reset.Type) != 1 || reset.Type[0] != ResetTypePower {
+		t.Errorf("expected type [power], got %v", reset.Type)
 	}
 }
 
@@ -321,23 +343,36 @@ func TestResetService_List(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]any{
+		body := `[
 			{
-				"reset": map[string]any{
-					"server_ip":       "123.123.123.123",
+				"reset": {
+					"server_ip": "123.123.123.123",
 					"server_ipv6_net": "2a01:4f8:111:4221::",
-					"server_number":   321,
-					"type":            []string{"sw", "hw", "man"},
-				},
+					"server_number": 321,
+					"type": [
+						"sw",
+						"hw",
+						"man"
+					]
+				}
 			},
 			{
-				"reset": map[string]any{
-					"server_ip":     "124.124.124.124",
-					"server_number": 456,
-					"type":          []string{"sw", "hw"},
-				},
-			},
-		})
+				"reset": {
+					"server_ip": "111.111.111.111",
+					"server_ipv6_net": "2a01:4f8:111:4221::",
+					"server_number": 111,
+					"type": [
+						"power",
+						"power_long",
+						"hw",
+						"man"
+					]
+				}
+			}
+		]`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -354,5 +389,23 @@ func TestResetService_List(t *testing.T) {
 	}
 	if len(resets[0].Type) != 3 {
 		t.Errorf("expected 3 reset types on first, got %d", len(resets[0].Type))
+	}
+	expectedFirst := []ResetType{ResetTypeSoftware, ResetTypeHardware, ResetTypeManual}
+	for i, want := range expectedFirst {
+		if resets[0].Type[i] != want {
+			t.Errorf("expected reset type %s at index %d, got %s", want, i, resets[0].Type[i])
+		}
+	}
+	if resets[1].ServerNumber != 111 {
+		t.Errorf("expected server_number 111 on second, got %d", resets[1].ServerNumber)
+	}
+	if len(resets[1].Type) != 4 {
+		t.Errorf("expected 4 reset types on second, got %d", len(resets[1].Type))
+	}
+	expectedSecond := []ResetType{ResetTypePower, ResetTypePowerLong, ResetTypeHardware, ResetTypeManual}
+	for i, want := range expectedSecond {
+		if resets[1].Type[i] != want {
+			t.Errorf("expected reset type %s at index %d, got %s", want, i, resets[1].Type[i])
+		}
 	}
 }

@@ -11,7 +11,7 @@ import (
 // VSwitchServer status constants.
 const (
 	VSwitchServerStatusReady      = "ready"
-	VSwitchServerStatusProcessing = "processing"
+	VSwitchServerStatusProcessing = "in process"
 	VSwitchServerStatusFailed     = "failed"
 )
 
@@ -49,7 +49,7 @@ type VSwitchServer struct {
 	ServerIP      string `json:"server_ip"`
 	ServerIPv6Net string `json:"server_ipv6_net"`
 	ServerNumber  int    `json:"server_number"`
-	Status        string `json:"status"` // VSwitchServerStatusReady, VSwitchServerStatusProcessing, or VSwitchServerStatusFailed
+	Status        string `json:"status"` // VSwitchServerStatusReady, VSwitchServerStatusProcessing ("in process"), or VSwitchServerStatusFailed
 }
 
 // VSwitchSubnet represents a subnet attached to a vSwitch.
@@ -190,7 +190,7 @@ func (v *VSwitchService) WaitForVSwitchReady(ctx context.Context, id int) error 
 		if err != nil {
 			return false, err
 		}
-		// Check if all servers are in "ready" status (not "processing" or "failed")
+		// Check if all servers are in "ready" status (not "in process" or "failed")
 		for _, server := range vswitch.Servers {
 			if server.Status == VSwitchServerStatusFailed {
 				return false, fmt.Errorf("vswitch %d: server %d is in status failed", id, server.ServerNumber)
