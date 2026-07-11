@@ -396,3 +396,49 @@ func TestOrderingService_ListProducts_DecodesOrderableAddonPrices(t *testing.T) 
 		t.Errorf("Price.Net = %v, want 1.7", products[0].OrderableAddons[0].Prices[0].Price.Net.Float64())
 	}
 }
+
+// addonProductJSON is a doc-verbatim GET /order/server_addon/{server-number}/product payload.
+const addonProductJSON = `[
+	{
+		"product": {
+			"id": "additional_ipv4",
+			"name": "Additional IP address",
+			"type": "ip_ipv4",
+			"price": {
+				"location": "NBG1",
+				"price": { "net": "0.8403", "gross": "0.8403", "hourly_net": "0.0014", "hourly_gross": "0.0014" },
+				"price_setup": { "net": "19.0000", "gross": "19.0000" }
+			}
+		}
+	}
+]`
+
+func TestOrderingService_ListAddonProducts_DecodesDocVerbatimPayload(t *testing.T) {
+	client := newTestOrderingClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/order/server_addon/123/product" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(addonProductJSON))
+	})
+
+	products, err := client.Ordering.ListAddonProducts(context.Background(), 123)
+	if err != nil {
+		t.Fatalf("ListAddonProducts() error = %v", err)
+	}
+
+	if len(products) != 1 {
+		t.Fatalf("expected 1 addon product, got %d", len(products))
+	}
+
+	product := products[0]
+	if product.ID != "additional_ipv4" {
+		t.Errorf("ID = %q, want %q", product.ID, "additional_ipv4")
+	}
+	if product.Type != "ip_ipv4" {
+		t.Errorf("Type = %q, want %q", product.Type, "ip_ipv4")
+	}
+	if product.Price.Price.Net.Float64() != 0.8403 {
+		t.Errorf("Price.Price.Net = %v, want 0.8403", product.Price.Price.Net.Float64())
+	}
+}
