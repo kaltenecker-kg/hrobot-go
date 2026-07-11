@@ -93,6 +93,8 @@ type TrafficSize struct {
 
 // UnmarshalJSON handles "unlimited" string, human-readable strings like "5 TB", and numeric values.
 func (t *TrafficSize) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*t = TrafficSize{}
 	// Handle null
 	if string(data) == "null" {
 		return nil
@@ -215,6 +217,8 @@ func init() {
 // UnmarshalJSON parses timestamp and converts to Berlin time.
 // Treats JSON null as the zero time.Time value.
 func (bt *BerlinTime) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*bt = BerlinTime{}
 	// Handle null
 	if string(data) == "null" {
 		return nil
@@ -257,6 +261,8 @@ type FlexibleID string
 
 // UnmarshalJSON handles both JSON string and JSON number encodings of an ID.
 func (f *FlexibleID) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*f = ""
 	if len(data) == 0 || string(data) == "null" {
 		return nil
 	}
@@ -279,6 +285,8 @@ type StringFloat float64
 // UnmarshalJSON handles string-encoded floats and JSON null.
 // Treats JSON null (and empty string) as the zero value.
 func (sf *StringFloat) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*sf = 0
 	// Handle null
 	if string(data) == "null" {
 		return nil
