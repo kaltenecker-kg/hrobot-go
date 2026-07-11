@@ -599,6 +599,205 @@ paths:
                 $ref: '#/components/schemas/Error'
       x-rate-limit: "5000 requests per 1 hour"
 
+  /subnet/{net-ip}/mac:
+    get:
+      summary: Get subnet MAC address
+      description: Query if it is possible to set a separate MAC address
+      operationId: getSubnetMAC
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      responses:
+        '200':
+          description: MAC address information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MACAddress'
+        '404':
+          description: Subnet not found or MAC not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "5000 requests per 1 hour"
+
+    put:
+      summary: Generate separate MAC address for subnet
+      description: Generate a separate MAC address
+      operationId: generateSubnetMAC
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - mac
+              properties:
+                mac:
+                  type: string
+                  description: Target MAC address
+      responses:
+        '200':
+          description: MAC address generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MACAddress'
+        '404':
+          description: Subnet not found or MAC not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Generating the separate MAC address failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "10 requests per 1 hour"
+
+    delete:
+      summary: Remove separate MAC address for subnet
+      description: |
+        Remove a separate MAC address and set it to the default value (the
+        MAC address of the servers main IP address).
+      operationId: removeSubnetMAC
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      responses:
+        '200':
+          description: MAC address removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MACAddress'
+        '404':
+          description: Subnet not found or MAC not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Removing the separate MAC address failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "10 requests per 1 hour"
+
+  /subnet/{net-ip}/cancellation:
+    get:
+      summary: Get subnet cancellation status
+      description: Query cancellation data for a subnet
+      operationId: getSubnetCancellation
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      responses:
+        '200':
+          description: Cancellation data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubnetCancellation'
+        '404':
+          description: Subnet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: It is not possible to cancel this subnet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Cancel subnet
+      description: Cancel a subnet
+      operationId: cancelSubnet
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - cancellation_date
+              properties:
+                cancellation_date:
+                  type: string
+                  description: Date which you want the subnet cancellation to go into effect or "now" to cancel immediately
+                  example: "2022-02-11"
+      responses:
+        '200':
+          description: Subnet cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubnetCancellation'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Subnet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The subnet cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    delete:
+      summary: Revoke subnet cancellation
+      description: Revoke a subnet cancellation
+      operationId: revokeSubnetCancellation
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      responses:
+        '200':
+          description: Subnet cancellation revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubnetCancellation'
+        '404':
+          description: Subnet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The subnet cancellation cannot be revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
   # Reset endpoints
   /reset:
     get:
@@ -1001,6 +1200,380 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: Deactivation of the Rescue System failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /boot/{server-number}/rescue/last:
+    get:
+      summary: Get last rescue activation
+      description: Show data of last rescue activation
+      operationId: getLastRescueActivation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Last rescue activation data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescueSystemActivated'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /boot/{server-number}/linux:
+    get:
+      summary: Get Linux installation options
+      description: Query boot options for the Linux installation
+      operationId: getLinuxOptions
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Linux installation options retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinuxSystem'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Activate Linux installation
+      description: Activate Linux installation
+      operationId: activateLinuxInstallation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - dist
+                - lang
+              properties:
+                dist:
+                  type: string
+                  description: Distribution
+                  example: "CentOS 5.5 minimal"
+                arch:
+                  type: integer
+                  description: Architecture (optional, default 64)
+                  enum: [32, 64]
+                  example: 64
+                  deprecated: true
+                lang:
+                  type: string
+                  description: Language
+                  example: "en"
+                authorized_key:
+                  type: array
+                  items:
+                    type: string
+                  description: One or more SSH key fingerprints (optional)
+      responses:
+        '200':
+          description: Linux installation activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinuxSystemActivated'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Activation of the Linux installation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    delete:
+      summary: Deactivate Linux installation
+      description: Deactivate Linux installation
+      operationId: deactivateLinuxInstallation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Linux installation deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinuxSystem'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Deactivation of the Linux installation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /boot/{server-number}/linux/last:
+    get:
+      summary: Get last Linux installation
+      description: Show data of last Linux installation
+      operationId: getLastLinuxInstallation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Last Linux installation data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinuxSystemActivated'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /boot/{server-number}/vnc:
+    get:
+      summary: Get VNC installation options
+      description: Query boot options for the VNC installation
+      operationId: getVNCOptions
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: VNC installation options retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VNCSystem'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Activate VNC installation
+      description: Activate VNC installation
+      operationId: activateVNCInstallation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - dist
+                - lang
+              properties:
+                dist:
+                  type: string
+                  description: Distribution
+                  example: "centOS-5.0"
+                arch:
+                  type: integer
+                  description: Architecture (optional, default 64)
+                  enum: [32, 64]
+                  example: 64
+                  deprecated: true
+                lang:
+                  type: string
+                  description: Language
+                  example: "en_US"
+      responses:
+        '200':
+          description: VNC installation activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VNCSystemActivated'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Activation of the VNC installation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    delete:
+      summary: Deactivate VNC installation
+      description: Deactivate VNC installation
+      operationId: deactivateVNCInstallation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: VNC installation deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VNCSystem'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Deactivation of the VNC installation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /boot/{server-number}/windows:
+    get:
+      summary: Get Windows installation options
+      description: Query boot options for the windows installation
+      operationId: getWindowsOptions
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Windows installation options retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WindowsSystem'
+        '404':
+          description: Server not found, boot configuration not available, or Windows version outdated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Activate Windows installation
+      description: |
+        Activate Windows installation. You need to order the Windows addon
+        for the server via the Robot webpanel first. After a reboot, the
+        installation will start, and all data on the server will be deleted.
+      operationId: activateWindowsInstallation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - lang
+                - os
+              properties:
+                lang:
+                  type: string
+                  description: Language
+                  example: "en"
+                os:
+                  type: string
+                  description: Operating system
+                  example: "Windows Server 2019 Standard Edition"
+      responses:
+        '200':
+          description: Windows installation activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WindowsSystemActivated'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Server not found, boot configuration not available, Windows addon missing, or Windows version outdated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Activation of the windows installation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    delete:
+      summary: Deactivate Windows installation
+      description: Deactivate Windows installation
+      operationId: deactivateWindowsInstallation
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Windows installation deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WindowsSystem'
+        '404':
+          description: Server not found, boot configuration not available, or Windows version outdated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Deactivation of the windows installation failed
           content:
             application/json:
               schema:
@@ -1643,6 +2216,96 @@ paths:
           $ref: '#/components/responses/InvalidInput'
       x-rate-limit: "500 requests per 1 hour"
 
+  /firewall/template/{template-id}:
+    get:
+      summary: Get a specific firewall template
+      description: Get a specific firewall template
+      operationId: getFirewallTemplate
+      tags:
+        - Firewall
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '200':
+          description: Firewall template retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirewallTemplateDetailed'
+        '404':
+          description: Firewall template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Update a firewall template
+      description: Update a firewall template
+      operationId: updateFirewallTemplate
+      tags:
+        - Firewall
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: Template name
+                filter_ipv6:
+                  type: boolean
+                  description: Activate or deactivate the IPv6 filter
+                whitelist_hos:
+                  type: boolean
+                  description: Flag of Hetzner services whitelisting
+                is_default:
+                  type: boolean
+                  description: If true the template is selected by default in the Robot webpanel
+                rules:
+                  type: object
+                  description: Firewall rules
+      responses:
+        '200':
+          description: Firewall template updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirewallTemplateDetailed'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Firewall template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    delete:
+      summary: Delete a firewall template
+      description: Delete a firewall template
+      operationId: deleteFirewallTemplate
+      tags:
+        - Firewall
+      parameters:
+        - $ref: '#/components/parameters/TemplateId'
+      responses:
+        '200':
+          description: Firewall template deleted successfully (no output)
+        '404':
+          description: Firewall template not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
   # vSwitch endpoints
   /vswitch:
     get:
@@ -2047,6 +2710,15 @@ components:
         type: integer
         example: 4321
 
+    TemplateId:
+      name: template-id
+      in: path
+      required: true
+      description: Firewall template ID
+      schema:
+        type: integer
+        example: 123
+
   responses:
     NotFound:
       description: Resource not found
@@ -2303,6 +2975,34 @@ components:
               nullable: true
               description: Cancellation date if cancellation is active
 
+    SubnetCancellation:
+      type: object
+      properties:
+        cancellation:
+          type: object
+          properties:
+            ip:
+              type: string
+              description: IP address
+            mask:
+              type: string
+              description: Subnet mask in CIDR notation
+            server_number:
+              type: integer
+              description: Server ID
+            earliest_cancellation_date:
+              type: string
+              format: date
+              description: Earliest possible cancellation date
+            cancelled:
+              type: boolean
+              description: This shows whether or not the subnet is earmarked for cancellation
+            cancellation_date:
+              type: string
+              format: date
+              nullable: true
+              description: Cancellation date if cancellation is active
+
     MACAddress:
       type: object
       properties:
@@ -2341,7 +3041,8 @@ components:
             server_ip:
               type: string
               format: ipv4
-              description: Servers main IP address
+              nullable: true
+              description: Servers main IP address (null for an unassigned subnet)
             server_number:
               type: integer
               description: Server ID
@@ -2477,20 +3178,43 @@ components:
             rescue:
               $ref: '#/components/schemas/RescueSystem/properties/rescue'
             linux:
-              type: object
-              description: Linux installation configuration
+              $ref: '#/components/schemas/LinuxSystem/properties/linux'
             vnc:
-              type: object
-              description: VNC installation configuration
+              $ref: '#/components/schemas/VNCSystem/properties/vnc'
             windows:
-              type: object
-              description: Windows installation configuration
+              $ref: '#/components/schemas/WindowsSystem/properties/windows'
             plesk:
               type: object
               description: Plesk installation configuration
             cpanel:
               type: object
               description: cPanel installation configuration
+
+    BootKey:
+      type: object
+      description: |
+        One SSH key attached to a rescue/Linux boot activation. The doc's
+        empty-array examples for authorized_key/host_key don't show the
+        object shape directly, but the populated examples elsewhere in the
+        doc (e.g. the SSH Keys section, and Storage Box SSH access) show
+        each array entry wrapped as {"key": {name, fingerprint, type,
+        size}}, not a bare fingerprint string.
+      properties:
+        key:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Key name
+            fingerprint:
+              type: string
+              description: Key fingerprint
+            type:
+              type: string
+              description: Key algorithm type
+            size:
+              type: integer
+              description: Key size in bits
 
     RescueSystem:
       type: object
@@ -2538,12 +3262,12 @@ components:
             authorized_key:
               type: array
               items:
-                type: string
+                $ref: '#/components/schemas/BootKey'
               description: Authorized public SSH keys
             host_key:
               type: array
               items:
-                type: string
+                $ref: '#/components/schemas/BootKey'
               description: Host keys
     ServerBasic:
       type: object
@@ -2746,13 +3470,13 @@ components:
             authorized_key:
               type: array
               items:
-                type: string
+                $ref: '#/components/schemas/BootKey'
               description: Authorized public SSH keys
               example: [ ]
             host_key:
               type: array
               items:
-                type: string
+                $ref: '#/components/schemas/BootKey'
               description: Host keys
               example: [ ]
           required:
@@ -2764,6 +3488,339 @@ components:
             - password
             - authorized_key
             - host_key
+
+    LinuxSystem:
+      type: object
+      properties:
+        linux:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+            dist:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              description: Array of available distributions or the active distribution
+            arch:
+              oneOf:
+                - type: array
+                  items:
+                    type: integer
+                    enum: [32, 64]
+                - type: integer
+                  enum: [32, 64]
+              description: Array of available architectures or the active architecture
+              deprecated: true
+            lang:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              description: Array of available languages or the active language
+            active:
+              type: boolean
+              description: Current Linux installation status
+            password:
+              type: string
+              nullable: true
+              description: Current Linux installation password or null
+            authorized_key:
+              type: array
+              items:
+                $ref: '#/components/schemas/BootKey'
+              description: Authorized public SSH keys
+            host_key:
+              type: array
+              items:
+                $ref: '#/components/schemas/BootKey'
+              description: Host keys
+
+    LinuxSystemActivated:
+      type: object
+      properties:
+        linux:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+              example: "123.123.123.123"
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+              example: "2a01:4f8:111:4221::"
+            server_number:
+              type: integer
+              description: Server ID
+              example: 321
+            dist:
+              type: string
+              description: Distribution
+              example: "CentOS 5.5 minimal"
+            arch:
+              type: integer
+              enum: [32, 64]
+              description: Architecture
+              example: 32
+              deprecated: true
+            lang:
+              type: string
+              description: Language
+              example: "en"
+            active:
+              type: boolean
+              description: Linux installation status (always true when activated)
+              example: true
+            password:
+              type: string
+              description: Linux installation password
+              example: "jEt0dtUvomlyOwRr"
+            authorized_key:
+              type: array
+              items:
+                $ref: '#/components/schemas/BootKey'
+              description: Authorized public SSH keys
+              example: [ ]
+            host_key:
+              type: array
+              items:
+                $ref: '#/components/schemas/BootKey'
+              description: Host keys
+              example: [ ]
+          required:
+            - server_ip
+            - server_ipv6_net
+            - server_number
+            - dist
+            - lang
+            - active
+            - password
+            - authorized_key
+            - host_key
+
+    VNCSystem:
+      type: object
+      properties:
+        vnc:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+            dist:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              description: Array of available distributions or the active distribution
+            arch:
+              oneOf:
+                - type: array
+                  items:
+                    type: integer
+                    enum: [32, 64]
+                - type: integer
+                  enum: [32, 64]
+              description: Array of available architectures or the active architecture
+              deprecated: true
+            lang:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              description: Array of available languages or the active language
+            active:
+              type: boolean
+              description: Current VNC installation status
+            password:
+              type: string
+              nullable: true
+              description: Current VNC installation password or null
+
+    VNCSystemActivated:
+      type: object
+      properties:
+        vnc:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+              example: "123.123.123.123"
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+              example: "2a01:4f8:111:4221::"
+            server_number:
+              type: integer
+              description: Server ID
+              example: 321
+            dist:
+              type: string
+              description: Distribution
+              example: "centOS-5.0"
+            arch:
+              type: integer
+              enum: [32, 64]
+              description: Architecture
+              example: 32
+              deprecated: true
+            lang:
+              type: string
+              description: Language
+              example: "en_US"
+            active:
+              type: boolean
+              description: VNC installation status (always true when activated)
+              example: true
+            password:
+              type: string
+              description: VNC installation password
+              example: "jEt0dtUvomlyOwRr"
+          required:
+            - server_ip
+            - server_ipv6_net
+            - server_number
+            - dist
+            - lang
+            - active
+            - password
+
+    WindowsSystem:
+      type: object
+      properties:
+        windows:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+            dist:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              nullable: true
+              description: Array of available distributions or the active distribution
+              deprecated: true
+            arch:
+              oneOf:
+                - type: array
+                  items:
+                    type: integer
+                    enum: [32, 64]
+                - type: integer
+                  enum: [32, 64]
+              description: Array of available architectures or the active architecture
+              deprecated: true
+            os:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              description: Array of available operating systems or the active operating system
+            lang:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              nullable: true
+              description: Array of available languages or the active language
+            active:
+              type: boolean
+              description: Current Windows installation status
+            password:
+              type: string
+              nullable: true
+              description: Current Windows installation password or null
+
+    WindowsSystemActivated:
+      type: object
+      properties:
+        windows:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+              example: "123.123.123.123"
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+              example: "2a01:4f8:111:4221::"
+            server_number:
+              type: integer
+              description: Server ID
+              example: 321
+            dist:
+              type: string
+              description: Distribution
+              example: "standard"
+              deprecated: true
+            os:
+              type: string
+              description: Operating system
+              example: "Windows Server 2019 Standard Edition"
+            lang:
+              type: string
+              description: Language
+              example: "en"
+            active:
+              type: boolean
+              description: Windows installation status (always true when activated)
+              example: true
+            password:
+              type: string
+              description: Windows installation password
+              example: "jEt0dtUvomlyOwRr"
+          required:
+            - server_ip
+            - server_ipv6_net
+            - server_number
+            - os
+            - lang
+            - active
+            - password
 
     ReverseDNS:
       type: object

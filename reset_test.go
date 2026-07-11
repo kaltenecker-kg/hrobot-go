@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestResetService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/reset/321" {
 			t.Errorf("expected path '/reset/321', got '%s'", r.URL.Path)
 		}
@@ -33,7 +36,7 @@ func TestResetService_Get(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -95,9 +98,10 @@ func TestResetService_Execute(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/reset/321" {
 					t.Errorf("expected path '/reset/321', got '%s'", r.URL.Path)
 				}
@@ -127,7 +131,7 @@ func TestResetService_Execute(t *testing.T) {
 				if _, err := w.Write([]byte(body)); err != nil {
 					t.Fatalf("failed to write response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -150,7 +154,8 @@ func TestResetService_Execute(t *testing.T) {
 }
 
 func TestResetService_ExecuteSoftware(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/reset/321" {
 			t.Errorf("expected path '/reset/321', got '%s'", r.URL.Path)
 		}
@@ -176,7 +181,7 @@ func TestResetService_ExecuteSoftware(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -193,7 +198,8 @@ func TestResetService_ExecuteSoftware(t *testing.T) {
 }
 
 func TestResetService_ExecuteHardware(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/reset/321" {
 			t.Errorf("expected path '/reset/321', got '%s'", r.URL.Path)
 		}
@@ -219,7 +225,7 @@ func TestResetService_ExecuteHardware(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -236,7 +242,8 @@ func TestResetService_ExecuteHardware(t *testing.T) {
 }
 
 func TestResetService_ExecutePower(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/reset/321" {
 			t.Errorf("expected path '/reset/321', got '%s'", r.URL.Path)
 		}
@@ -262,7 +269,7 @@ func TestResetService_ExecutePower(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -301,9 +308,10 @@ func TestResetService_ErrorHandling(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"error": map[string]any{
@@ -312,7 +320,7 @@ func TestResetService_ErrorHandling(t *testing.T) {
 						"message": "test error",
 					},
 				})
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -336,7 +344,8 @@ func TestResetService_ErrorHandling(t *testing.T) {
 }
 
 func TestResetService_List(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/reset" {
 			t.Errorf("expected path '/reset', got '%s'", r.URL.Path)
 		}
@@ -373,7 +382,7 @@ func TestResetService_List(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
