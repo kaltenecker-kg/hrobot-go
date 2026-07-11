@@ -38,6 +38,8 @@ const (
 	ProtocolICMP Protocol = "icmp"
 	ProtocolESP  Protocol = "esp"
 	ProtocolGRE  Protocol = "gre"
+	ProtocolIPIP Protocol = "ipip"
+	ProtocolAH   Protocol = "ah"
 )
 
 // ServerID represents a server identifier.
