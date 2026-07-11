@@ -45,7 +45,7 @@ func (f *FailoverService) List(ctx context.Context) ([]Failover, error) {
 	path := "/failover"
 
 	var result []Failover
-	if err := f.client.GetWrappedList(ctx, path, "failover", &result); err != nil {
+	if err := f.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 

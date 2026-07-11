@@ -86,7 +86,7 @@ func (a *AuctionServer) NextReduceTime() *time.Time {
 func (a *AuctionService) List(ctx context.Context) ([]AuctionServer, error) {
 	path := "/order/server_market/product"
 	var result []AuctionServer
-	if err := a.client.GetWrappedList(ctx, path, "product", &result); err != nil {
+	if err := a.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
