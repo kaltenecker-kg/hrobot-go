@@ -45,9 +45,12 @@ func (i *IPService) Get(ctx context.Context, ip net.IP) (*IPAddress, error) {
 }
 
 // SetTrafficWarnings enables or disables traffic warnings.
-func (i *IPService) SetTrafficWarnings(ctx context.Context, ip net.IP, enabled bool) error {
+//
+// POST /ip/{ip} returns the updated IP address resource (per the doc's
+// Output table), so this returns it rather than discarding the response.
+func (i *IPService) SetTrafficWarnings(ctx context.Context, ip net.IP, enabled bool) (*IPAddress, error) {
 	if ip == nil {
-		return NewParseError("invalid ip address", nil)
+		return nil, NewParseError("invalid ip address", nil)
 	}
 	path := fmt.Sprintf("/ip/%s", ip.String())
 
@@ -58,7 +61,11 @@ func (i *IPService) SetTrafficWarnings(ctx context.Context, ip net.IP, enabled b
 		data.Set("traffic_warnings", "false")
 	}
 
-	return i.client.Post(ctx, path, data, nil)
+	var ipAddr IPAddress
+	if err := i.client.Post(ctx, path, data, &ipAddr); err != nil {
+		return nil, err
+	}
+	return &ipAddr, nil
 }
 
 // CancelIP cancels an additional IP address.

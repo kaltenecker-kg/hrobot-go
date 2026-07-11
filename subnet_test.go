@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestSubnetService_Cancel_DisallowedByPolicy(t *testing.T) {
@@ -45,7 +47,8 @@ func subnetFixture() string {
 }
 
 func TestSubnetService_List(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/subnet" {
 			t.Errorf("expected '/subnet', got '%s'", r.URL.Path)
 		}
@@ -87,7 +90,7 @@ func TestSubnetService_List(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -107,14 +110,15 @@ func TestSubnetService_List(t *testing.T) {
 }
 
 func TestSubnetService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/subnet/123.123.123.123" {
 			t.Errorf("expected subnet path, got '%s'", r.URL.Path)
 		}
 		if _, err := w.Write([]byte(subnetFixture())); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -134,7 +138,8 @@ func TestSubnetService_Get(t *testing.T) {
 }
 
 func TestSubnetService_Update(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("expected POST, got '%s'", r.Method)
 		}
@@ -171,7 +176,7 @@ func TestSubnetService_Update(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -199,14 +204,15 @@ func subnetMACFixture(mac string) string {
 }
 
 func TestSubnetService_GetMAC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
 		if _, err := w.Write([]byte(subnetMACFixture("00:21:85:62:3e:9c"))); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -226,7 +232,8 @@ func TestSubnetService_GetMAC(t *testing.T) {
 }
 
 func TestSubnetService_SetMAC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "PUT" {
 			t.Errorf("expected PUT, got '%s'", r.Method)
 		}
@@ -239,7 +246,7 @@ func TestSubnetService_SetMAC(t *testing.T) {
 		if _, err := w.Write([]byte(subnetMACFixture("00:21:85:62:3e:9d"))); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -253,12 +260,18 @@ func TestSubnetService_SetMAC(t *testing.T) {
 }
 
 func TestSubnetService_DeleteMAC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
 			t.Errorf("expected DELETE, got '%s'", r.Method)
 		}
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Doc-verbatim example response body for
+		// DELETE /subnet/{net-ip}/mac: reverts to the default MAC (the
+		// server's main IP MAC), still shaped as a MACAddress envelope.
+		if _, err := w.Write([]byte(subnetMACFixture("00:21:85:62:3e:9c"))); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -268,7 +281,8 @@ func TestSubnetService_DeleteMAC(t *testing.T) {
 }
 
 func TestSubnetService_GetCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
@@ -292,7 +306,7 @@ func TestSubnetService_GetCancellation(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -318,12 +332,27 @@ func TestSubnetService_GetCancellation(t *testing.T) {
 }
 
 func TestSubnetService_WithdrawCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
 			t.Errorf("expected DELETE, got '%s'", r.Method)
 		}
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Doc-verbatim example response body for
+		// DELETE /subnet/{net-ip}/cancellation.
+		body := `{
+			"cancellation": {
+				"ip": "123.123.123.123",
+				"mask": "29",
+				"server_number": 321,
+				"earliest_cancellation_date": "2022-02-11",
+				"cancelled": false,
+				"cancellation_date": null
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
