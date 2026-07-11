@@ -380,7 +380,7 @@ func (o *OrderingService) ListProducts(ctx context.Context) ([]Product, error) {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-order-server-product-id
 func (o *OrderingService) GetProduct(ctx context.Context, productID string) (*Product, error) {
-	path := fmt.Sprintf("/order/server/product/%s", productID)
+	path := fmt.Sprintf("/order/server/product/%s", url.PathEscape(productID))
 	var result Product
 	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
