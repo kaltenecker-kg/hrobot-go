@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func wolFixture() string {
@@ -19,7 +21,8 @@ func wolFixture() string {
 }
 
 func TestWOLService_Send(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/wol/321" {
 			t.Errorf("expected path '/wol/321', got '%s'", r.URL.Path)
 		}
@@ -40,7 +43,7 @@ func TestWOLService_Send(t *testing.T) {
 		if _, err := w.Write([]byte(wolFixture())); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -60,7 +63,8 @@ func TestWOLService_Send(t *testing.T) {
 }
 
 func TestWOLService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/wol/321" {
 			t.Errorf("expected path '/wol/321', got '%s'", r.URL.Path)
 		}
@@ -70,7 +74,7 @@ func TestWOLService_Get(t *testing.T) {
 		if _, err := w.Write([]byte(wolFixture())); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

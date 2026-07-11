@@ -12,7 +12,8 @@ import (
 )
 
 func TestBootService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321" {
 			t.Errorf("expected path '/boot/321', got '%s'", r.URL.Path)
 		}
@@ -80,7 +81,7 @@ func TestBootService_Get(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -136,12 +137,11 @@ func TestBootService_Get(t *testing.T) {
 	}
 }
 
-// TestBootService_ActivateRescue is not wrapped with spectest.Handler:
-// spec/robot.yaml declares authorized_key/host_key as arrays of bare
-// fingerprint strings, but the actual API (and this fixture, matching the
-// wrapped {"key": {...}} shape used consistently elsewhere in this file)
-// returns an array of objects. That spec/API mismatch is pre-existing and
-// out of scope here.
+// TestBootService_ActivateRescue is now wrapped with spectest.Handler: the
+// spec/robot.yaml RescueSystemActivated.authorized_key/host_key schema
+// previously declared arrays of bare fingerprint strings; it now models the
+// doc's actual {"key": {name, fingerprint, type, size}} object shape (see
+// spec/README.md, "boot tag fixes"), matching this fixture.
 func TestBootService_ActivateRescue(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -176,9 +176,10 @@ func TestBootService_ActivateRescue(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/boot/321/rescue" {
 					t.Errorf("expected path '/boot/321/rescue', got '%s'", r.URL.Path)
 				}
@@ -243,7 +244,7 @@ func TestBootService_ActivateRescue(t *testing.T) {
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -387,7 +388,8 @@ func TestBootService_ActivateRescue_RequiresOS(t *testing.T) {
 }
 
 func TestBootService_DeactivateRescue(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/rescue" {
 			t.Errorf("expected path '/boot/321/rescue', got '%s'", r.URL.Path)
 		}
@@ -395,8 +397,25 @@ func TestBootService_DeactivateRescue(t *testing.T) {
 			t.Errorf("expected DELETE request, got '%s'", r.Method)
 		}
 
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Doc-verbatim example response body for
+		// DELETE /boot/{server-number}/rescue.
+		response := map[string]any{
+			"rescue": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"os":              []string{"linux", "vkvm"},
+				"arch":            []int{64, 32},
+				"active":          false,
+				"password":        nil,
+				"authorized_key":  []map[string]any{},
+				"host_key":        []map[string]any{},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -409,7 +428,8 @@ func TestBootService_DeactivateRescue(t *testing.T) {
 }
 
 func TestBootService_GetLastRescue(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/rescue/last" {
 			t.Errorf("expected path '/boot/321/rescue/last', got '%s'", r.URL.Path)
 		}
@@ -443,7 +463,7 @@ func TestBootService_GetLastRescue(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -493,9 +513,10 @@ func TestBootService_ActivateLinux(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/boot/321/linux" {
 					t.Errorf("expected path '/boot/321/linux', got '%s'", r.URL.Path)
 				}
@@ -545,7 +566,7 @@ func TestBootService_ActivateLinux(t *testing.T) {
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -580,7 +601,8 @@ func TestBootService_ActivateLinux(t *testing.T) {
 }
 
 func TestBootService_DeactivateLinux(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/linux" {
 			t.Errorf("expected path '/boot/321/linux', got '%s'", r.URL.Path)
 		}
@@ -588,8 +610,26 @@ func TestBootService_DeactivateLinux(t *testing.T) {
 			t.Errorf("expected DELETE request, got '%s'", r.Method)
 		}
 
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Doc-verbatim example response body for
+		// DELETE /boot/{server-number}/linux.
+		response := map[string]any{
+			"linux": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"dist":            []string{"CentOS 5.5 minimal", "Debian 7.8 minimal"},
+				"arch":            []int{64, 32},
+				"lang":            []string{"en"},
+				"active":          false,
+				"password":        nil,
+				"authorized_key":  []map[string]any{},
+				"host_key":        []map[string]any{},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -636,9 +676,10 @@ func TestBootService_ErrorHandling(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"error": map[string]any{
@@ -647,7 +688,7 @@ func TestBootService_ErrorHandling(t *testing.T) {
 						"message": "test error",
 					},
 				})
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -662,7 +703,8 @@ func TestBootService_ErrorHandling(t *testing.T) {
 }
 
 func TestBootService_ActivateVNC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/vnc" {
 			t.Errorf("expected path '/boot/321/vnc', got '%s'", r.URL.Path)
 		}
@@ -702,7 +744,7 @@ func TestBootService_ActivateVNC(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -725,7 +767,8 @@ func TestBootService_ActivateVNC(t *testing.T) {
 }
 
 func TestBootService_DeactivateVNC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/vnc" {
 			t.Errorf("expected path '/boot/321/vnc', got '%s'", r.URL.Path)
 		}
@@ -733,8 +776,24 @@ func TestBootService_DeactivateVNC(t *testing.T) {
 			t.Errorf("expected DELETE request, got '%s'", r.Method)
 		}
 
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Doc-verbatim example response body for
+		// DELETE /boot/{server-number}/vnc.
+		response := map[string]any{
+			"vnc": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"dist":            []string{"centOS-5.0", "Fedora-6", "openSUSE-10.2"},
+				"arch":            []int{64, 32},
+				"lang":            []string{"de_DE", "en_US"},
+				"active":          false,
+				"password":        nil,
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -746,7 +805,8 @@ func TestBootService_DeactivateVNC(t *testing.T) {
 }
 
 func TestBootService_GetLastLinux(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/linux/last" {
 			t.Errorf("expected path '/boot/321/linux/last', got '%s'", r.URL.Path)
 		}
@@ -767,12 +827,14 @@ func TestBootService_GetLastLinux(t *testing.T) {
 				"lang":            "en",
 				"active":          false,
 				"password":        password,
+				"authorized_key":  []map[string]any{},
+				"host_key":        []map[string]any{},
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -792,7 +854,8 @@ func TestBootService_GetLastLinux(t *testing.T) {
 }
 
 func TestBootService_GetWindows(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/windows" {
 			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
 		}
@@ -821,7 +884,7 @@ func TestBootService_GetWindows(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -847,7 +910,8 @@ func TestBootService_GetWindows(t *testing.T) {
 }
 
 func TestBootService_ActivateWindows(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/windows" {
 			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
 		}
@@ -884,7 +948,7 @@ func TestBootService_ActivateWindows(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -910,7 +974,8 @@ func TestBootService_ActivateWindows(t *testing.T) {
 }
 
 func TestBootService_DeactivateWindows(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/boot/321/windows" {
 			t.Errorf("expected path '/boot/321/windows', got '%s'", r.URL.Path)
 		}
@@ -918,8 +983,28 @@ func TestBootService_DeactivateWindows(t *testing.T) {
 			t.Errorf("expected DELETE request, got '%s'", r.Method)
 		}
 
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Doc-verbatim example response body for
+		// DELETE /boot/{server-number}/windows.
+		response := map[string]any{
+			"windows": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"os": []string{
+					"Windows Server 2022 Standard Edition",
+					"Windows Server 2019 Standard Edition",
+					"Windows Server 2016 Standard Edition",
+				},
+				"dist":     []string{"standard"},
+				"lang":     []string{"en", "de"},
+				"active":   false,
+				"password": nil,
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -931,7 +1016,8 @@ func TestBootService_DeactivateWindows(t *testing.T) {
 }
 
 func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("failed to parse form: %v", err)
 		}
@@ -959,7 +1045,7 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 			},
 		}
 		_ = json.NewEncoder(w).Encode(response)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

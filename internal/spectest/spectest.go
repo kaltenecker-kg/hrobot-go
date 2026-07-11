@@ -225,10 +225,23 @@ func Handler(t Reporter, spec *Spec, inner http.Handler) http.Handler {
 	})
 }
 
-// isFirewallRulesPath reports whether path is the firewall rules endpoint,
-// whose POST body uses bracket-key grammar that OpenAPI form-urlencoded
-// serialization cannot express.
+// isFirewallRulesPath reports whether path is a firewall endpoint whose POST
+// body may carry the rules[direction][index][field] bracket-key grammar that
+// OpenAPI form-urlencoded serialization cannot express: either
+// /firewall/{server-id}, /firewall/template, or /firewall/template/{id}.
 func isFirewallRulesPath(path string) bool {
 	segments := strings.Split(strings.Trim(path, "/"), "/")
-	return len(segments) == 2 && segments[0] == "firewall"
+	if segments[0] != "firewall" {
+		return false
+	}
+	switch len(segments) {
+	case 2:
+		// /firewall/{server-id} or /firewall/template
+		return true
+	case 3:
+		// /firewall/template/{template-id}
+		return segments[1] == "template"
+	default:
+		return false
+	}
 }
