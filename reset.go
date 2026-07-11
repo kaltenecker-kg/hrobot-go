@@ -24,7 +24,7 @@ func NewResetService(client *Client) *ResetService {
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-reset
 func (r *ResetService) List(ctx context.Context) ([]Reset, error) {
 	var resets []Reset
-	if err := r.client.GetWrappedList(ctx, "/reset", "reset", &resets); err != nil {
+	if err := r.client.Get(ctx, "/reset", &resets); err != nil {
 		return nil, err
 	}
 	return resets, nil

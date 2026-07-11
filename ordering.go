@@ -216,7 +216,7 @@ func (o *OrderingService) PlaceAddonOrder(_ context.Context, _ AddonOrder) (*Add
 func (o *OrderingService) ListMarketTransactions(ctx context.Context) ([]MarketTransaction, error) {
 	path := "/order/server_market/transaction"
 	var result []MarketTransaction
-	if err := o.client.GetWrappedList(ctx, path, "server_market_transaction", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -244,7 +244,7 @@ func (o *OrderingService) GetMarketTransaction(ctx context.Context, transactionI
 func (o *OrderingService) ListAddonTransactions(ctx context.Context) ([]AddonTransaction, error) {
 	path := "/order/server_addon/transaction"
 	var result []AddonTransaction
-	if err := o.client.GetWrappedList(ctx, path, "server_addon_transaction", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -330,7 +330,7 @@ type AddonProduct struct {
 func (o *OrderingService) ListTransactions(ctx context.Context) ([]MarketTransaction, error) {
 	path := "/order/server/transaction"
 	var result []MarketTransaction
-	if err := o.client.GetWrappedList(ctx, path, "transaction", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -354,7 +354,7 @@ func (o *OrderingService) GetTransaction(ctx context.Context, transactionID stri
 func (o *OrderingService) ListAddonProducts(ctx context.Context, serverNumber int) ([]AddonProduct, error) {
 	path := fmt.Sprintf("/order/server_addon/%d/product", serverNumber)
 	var result []AddonProduct
-	if err := o.client.GetWrappedList(ctx, path, "server_addon_product", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -368,7 +368,7 @@ func (o *OrderingService) ListAddonProducts(ctx context.Context, serverNumber in
 func (o *OrderingService) ListProducts(ctx context.Context) ([]Product, error) {
 	path := "/order/server/product"
 	var result []Product
-	if err := o.client.GetWrappedList(ctx, path, "product", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil

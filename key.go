@@ -43,7 +43,7 @@ type SSHKeyReference struct {
 func (k *KeyService) List(ctx context.Context) ([]SSHKey, error) {
 	path := "/key"
 	var result []SSHKey
-	if err := k.client.GetWrappedList(ctx, path, "key", &result); err != nil {
+	if err := k.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil

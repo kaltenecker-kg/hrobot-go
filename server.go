@@ -18,7 +18,7 @@ func NewServerService(client *Client) *ServerService {
 // List returns all servers.
 func (s *ServerService) List(ctx context.Context) ([]Server, error) {
 	var servers []Server
-	err := s.client.GetWrappedList(ctx, "/server", "server", &servers)
+	err := s.client.Get(ctx, "/server", &servers)
 	if err != nil {
 		return nil, err
 	}
