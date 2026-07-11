@@ -113,6 +113,52 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestUnmarshalJSONResetsReusedReceiver(t *testing.T) {
+	var ts TrafficSize
+	if err := json.Unmarshal([]byte(`"5 TB"`), &ts); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &ts); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if ts.Unlimited || ts.Bytes != 0 || ts.Raw != "" {
+		t.Errorf("TrafficSize not reset on null: %+v", ts)
+	}
+
+	var bt BerlinTime
+	if err := json.Unmarshal([]byte(`"2024-01-01 12:00:00"`), &bt); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &bt); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if !bt.IsZero() {
+		t.Errorf("BerlinTime not reset on null: %v", bt)
+	}
+
+	var sf StringFloat
+	if err := json.Unmarshal([]byte(`"1.5"`), &sf); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &sf); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if sf != 0 {
+		t.Errorf("StringFloat not reset on null: %v", sf)
+	}
+
+	var id FlexibleID
+	if err := json.Unmarshal([]byte(`283693`), &id); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &id); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if id != "" {
+		t.Errorf("FlexibleID not reset on null: %q", id)
+	}
+}
+
 func TestTrafficSizeString(t *testing.T) {
 	tests := []struct {
 		name string
