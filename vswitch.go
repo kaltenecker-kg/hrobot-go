@@ -8,6 +8,13 @@ import (
 	"strings"
 )
 
+// VSwitchServer status constants.
+const (
+	VSwitchServerStatusReady      = "ready"
+	VSwitchServerStatusProcessing = "processing"
+	VSwitchServerStatusFailed     = "failed"
+)
+
 // VSwitchService provides access to vSwitch related functions in the Hetzner Robot API.
 type VSwitchService struct {
 	client *Client
@@ -42,7 +49,7 @@ type VSwitchServer struct {
 	ServerIP      string `json:"server_ip"`
 	ServerIPv6Net string `json:"server_ipv6_net"`
 	ServerNumber  int    `json:"server_number"`
-	Status        string `json:"status"` // "ready", "in process", "failed"
+	Status        string `json:"status"` // VSwitchServerStatusReady, VSwitchServerStatusProcessing, or VSwitchServerStatusFailed
 }
 
 // VSwitchSubnet represents a subnet attached to a vSwitch.
@@ -188,7 +195,10 @@ func (v *VSwitchService) WaitForVSwitchReady(ctx context.Context, id int) error 
 		}
 		// Check if all servers are in "ready" status (not "processing" or "failed")
 		for _, server := range vswitch.Servers {
-			if server.Status != "ready" {
+			if server.Status == VSwitchServerStatusFailed {
+				return false, fmt.Errorf("vswitch %d: server %d is in status failed", id, server.ServerNumber)
+			}
+			if server.Status != VSwitchServerStatusReady {
 				return false, nil
 			}
 		}
