@@ -51,62 +51,72 @@ func TestOrderingService_PolicyShortCircuit(t *testing.T) {
 	}
 }
 
-// marketTransactionJSON is a doc-verbatim GET /order/server_market/transaction
-// payload: the product id is a JSON number and "arch" is a string.
+// marketTransactionJSON is a doc-verbatim GET /order/server_market/transaction/{id}
+// payload. The doc always envelopes transactions under the key "transaction"
+// (it never uses "server_market_transaction" for any order endpoint); the
+// product id is a JSON number and "arch" is a string.
 const marketTransactionJSON = `{
-	"server_market_transaction": {
-		"id": "B20150121-345678",
-		"date": "2015-01-21 15:57:31",
-		"status": "ready",
-		"server_number": 2417234,
-		"server_ip": "123.123.123.123",
+	"transaction": {
+		"id": "B20150121-344958-251479",
+		"date": "2015-01-21T12:54:01+01:00",
+		"status": "in process",
+		"server_number": null,
+		"server_ip": null,
 		"authorized_key": [
 			{
 				"key": {
 					"name": "key1",
-					"fingerprint": "15:28:...",
+					"fingerprint": "15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb",
 					"type": "ED25519",
 					"size": 256
 				}
 			}
 		],
 		"host_key": [
-			{
-				"key": {
-					"name": "host1",
-					"fingerprint": "aa:bb:...",
-					"type": "ED25519",
-					"size": 256
-				}
-			}
 		],
 		"comment": null,
 		"product": {
 			"id": 283693,
 			"name": "SB110",
+			"description": [
+				"Intel Core i7 980x",
+				"6x RAM 4096 MB DDR3",
+				"2x HDD 1,5 TB SATA",
+				"2x SSD 120 GB SATA"
+			],
 			"traffic": "20 TB",
 			"dist": "Rescue system",
 			"arch": "64",
-			"lang": "en"
+			"lang": "en",
+			"cpu": "Intel Core i7 980x",
+			"cpu_benchmark": 8944,
+			"memory_size": 24,
+			"hdd_size": 1536,
+			"hdd_text": "ENT.HDD ECC INIC",
+			"hdd_count": 2,
+			"datacenter": "FSN1-DC5",
+			"network_speed": "100 Mbit/s"
 		},
-		"addons": []
+		"addons": [
+			"primary_ipv4"
+		]
 	}
 }`
 
-// serverTransactionJSON is a doc-verbatim GET /order/server/transaction
+// serverTransactionJSON is a doc-verbatim GET /order/server/transaction/{id}
 // payload: the product id is a JSON string (e.g. "EX40").
 const serverTransactionJSON = `{
 	"transaction": {
-		"id": "B20150121-345678",
-		"date": "2015-01-21 15:57:31",
+		"id": "B20150121-344958-251479",
+		"date": "2015-01-21T12:54:01+01:00",
 		"status": "ready",
-		"server_number": 2417234,
-		"server_ip": "123.123.123.123",
+		"server_number": 107239,
+		"server_ip": "188.40.1.1",
 		"authorized_key": [
 			{
 				"key": {
 					"name": "key1",
-					"fingerprint": "15:28:...",
+					"fingerprint": "15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb",
 					"type": "ED25519",
 					"size": 256
 				}
@@ -115,23 +125,31 @@ const serverTransactionJSON = `{
 		"host_key": [
 			{
 				"key": {
-					"name": "host1",
-					"fingerprint": "aa:bb:...",
-					"type": "ED25519",
-					"size": 256
+					"fingerprint": "c1:e4:08:73:dd:f7:e9:d1:94:ab:e9:0f:28:b2:d2:ed",
+					"type": "DSA",
+					"size": 1024
 				}
 			}
 		],
 		"comment": null,
 		"product": {
 			"id": "EX40",
-			"name": "EX40",
-			"traffic": "unlimited",
-			"dist": "Rescue system",
+			"name": "Dedicated Server EX40",
+			"description": [
+				"Intel Core i7-4770 Quad-Core Haswell",
+				"32 GB DDR3 RAM",
+				"2 x 2 TB SATA 6 Gb/s Enterprise HDD; 7200 rpm(Software-RAID 1)",
+				"1 Gbit/s bandwidth"
+			],
+			"traffic": "30 TB",
+			"dist": "Debian 7.7 minimal",
 			"arch": "64",
-			"lang": "en"
+			"lang": "en",
+			"location": "FSN1"
 		},
-		"addons": []
+		"addons": [
+			"primary_ipv4"
+		]
 	}
 }`
 
@@ -144,17 +162,11 @@ func newTestOrderingClient(t *testing.T, handler http.HandlerFunc) *Client {
 
 func assertTransactionCommon(t *testing.T, tx *MarketTransaction) {
 	t.Helper()
-	if tx.ID != "B20150121-345678" {
-		t.Errorf("ID = %q, want %q", tx.ID, "B20150121-345678")
+	if tx.ID != "B20150121-344958-251479" {
+		t.Errorf("ID = %q, want %q", tx.ID, "B20150121-344958-251479")
 	}
-	if tx.Status != "ready" {
-		t.Errorf("Status = %q, want %q", tx.Status, "ready")
-	}
-	if len(tx.AuthorizedKey) != 1 || tx.AuthorizedKey[0].Key.Fingerprint != "15:28:..." {
-		t.Errorf("AuthorizedKey = %+v, want a single key with fingerprint 15:28:...", tx.AuthorizedKey)
-	}
-	if len(tx.HostKey) != 1 || tx.HostKey[0].Key.Fingerprint != "aa:bb:..." {
-		t.Errorf("HostKey = %+v, want a single key with fingerprint aa:bb:...", tx.HostKey)
+	if len(tx.AuthorizedKey) != 1 || tx.AuthorizedKey[0].Key.Fingerprint != "15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb" {
+		t.Errorf("AuthorizedKey = %+v, want a single key with fingerprint 15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb", tx.AuthorizedKey)
 	}
 	if tx.Product.Arch != "64" {
 		t.Errorf("Product.Arch = %q, want %q", tx.Product.Arch, "64")
@@ -163,19 +175,25 @@ func assertTransactionCommon(t *testing.T, tx *MarketTransaction) {
 
 func TestOrderingService_GetMarketTransaction_DecodesDocVerbatimPayload(t *testing.T) {
 	client := newTestOrderingClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/order/server_market/transaction/B20150121-345678" {
+		if r.URL.Path != "/order/server_market/transaction/B20150121-344958-251479" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(marketTransactionJSON))
 	})
 
-	tx, err := client.Ordering.GetMarketTransaction(context.Background(), "B20150121-345678")
+	tx, err := client.Ordering.GetMarketTransaction(context.Background(), "B20150121-344958-251479")
 	if err != nil {
 		t.Fatalf("GetMarketTransaction() error = %v", err)
 	}
 
 	assertTransactionCommon(t, tx)
+	if tx.Status != "in process" {
+		t.Errorf("Status = %q, want %q", tx.Status, "in process")
+	}
+	if len(tx.HostKey) != 0 {
+		t.Errorf("HostKey = %+v, want empty", tx.HostKey)
+	}
 	if tx.Product.ID != FlexibleID("283693") {
 		t.Errorf("Product.ID = %q, want %q", tx.Product.ID, "283693")
 	}
@@ -203,19 +221,25 @@ func TestOrderingService_ListMarketTransactions_DecodesDocVerbatimPayload(t *tes
 
 func TestOrderingService_GetTransaction_DecodesDocVerbatimPayload(t *testing.T) {
 	client := newTestOrderingClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/order/server/transaction/B20150121-345678" {
+		if r.URL.Path != "/order/server/transaction/B20150121-344958-251479" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(serverTransactionJSON))
 	})
 
-	tx, err := client.Ordering.GetTransaction(context.Background(), "B20150121-345678")
+	tx, err := client.Ordering.GetTransaction(context.Background(), "B20150121-344958-251479")
 	if err != nil {
 		t.Fatalf("GetTransaction() error = %v", err)
 	}
 
 	assertTransactionCommon(t, tx)
+	if tx.Status != "ready" {
+		t.Errorf("Status = %q, want %q", tx.Status, "ready")
+	}
+	if len(tx.HostKey) != 1 || tx.HostKey[0].Key.Fingerprint != "c1:e4:08:73:dd:f7:e9:d1:94:ab:e9:0f:28:b2:d2:ed" {
+		t.Errorf("HostKey = %+v, want a single key with fingerprint c1:e4:08:73:dd:f7:e9:d1:94:ab:e9:0f:28:b2:d2:ed", tx.HostKey)
+	}
 	if tx.Product.ID != FlexibleID("EX40") {
 		t.Errorf("Product.ID = %q, want %q", tx.Product.ID, "EX40")
 	}
@@ -242,15 +266,37 @@ func TestOrderingService_ListTransactions_DecodesDocVerbatimPayload(t *testing.T
 }
 
 func TestOrderingService_WaitForMarketTransactionCompletion_ZeroIntervalDoesNotPanic(t *testing.T) {
+	const readyTransactionJSON = `{
+		"transaction": {
+			"id": "B20150121-344958-251479",
+			"date": "2015-01-21T12:54:01+01:00",
+			"status": "ready",
+			"server_number": 107239,
+			"server_ip": "188.40.1.1",
+			"authorized_key": [],
+			"host_key": [],
+			"comment": null,
+			"product": {
+				"id": 283693,
+				"name": "SB110",
+				"traffic": "20 TB",
+				"dist": "Rescue system",
+				"arch": "64",
+				"lang": "en"
+			},
+			"addons": []
+		}
+	}`
+
 	client := newTestOrderingClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(marketTransactionJSON))
+		_, _ = w.Write([]byte(readyTransactionJSON))
 	})
 
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		tx, err := client.Ordering.WaitForMarketTransactionCompletion(context.Background(), "B20150121-345678", 0)
+		tx, err := client.Ordering.WaitForMarketTransactionCompletion(context.Background(), "B20150121-344958-251479", 0)
 		if err != nil {
 			t.Errorf("WaitForMarketTransactionCompletion() error = %v", err)
 			return
@@ -269,9 +315,9 @@ func TestOrderingService_WaitForMarketTransactionCompletion_ZeroIntervalDoesNotP
 
 func TestOrderingService_WaitForMarketTransactionCompletion_ErrorIncludesTransactionID(t *testing.T) {
 	const errorTransactionJSON = `{
-		"server_market_transaction": {
+		"transaction": {
 			"id": "B20150121-999999",
-			"date": "2015-01-21 15:57:31",
+			"date": "2015-01-21T12:54:01+01:00",
 			"status": "error",
 			"server_number": null,
 			"server_ip": null,
@@ -329,9 +375,11 @@ func TestOrderingService_GetProduct_DecodesOrderableAddonPrices(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
-			"id": "EX40",
-			"name": "EX40",
-			"orderable_addons": ` + productOrderableAddonsJSON + `
+			"product": {
+				"id": "EX40",
+				"name": "Dedicated Server EX40",
+				"orderable_addons": ` + productOrderableAddonsJSON + `
+			}
 		}`))
 	})
 
@@ -374,7 +422,7 @@ func TestOrderingService_ListProducts_DecodesOrderableAddonPrices(t *testing.T) 
 			{
 				"product": {
 					"id": "EX40",
-					"name": "EX40",
+					"name": "Dedicated Server EX40",
 					"orderable_addons": ` + productOrderableAddonsJSON + `
 				}
 			}
@@ -397,7 +445,8 @@ func TestOrderingService_ListProducts_DecodesOrderableAddonPrices(t *testing.T) 
 	}
 }
 
-// addonProductJSON is a doc-verbatim GET /order/server_addon/{server-number}/product payload.
+// addonProductJSON is a doc-verbatim (abridged to one product) GET
+// /order/server_addon/{server-number}/product payload.
 const addonProductJSON = `[
 	{
 		"product": {

@@ -2,7 +2,6 @@ package hrobot
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -27,22 +26,22 @@ func TestSubnetService_Cancel_DisallowedByPolicy(t *testing.T) {
 	}
 }
 
-func subnetFixture() map[string]any {
-	return map[string]any{
-		"subnet": map[string]any{
-			"ip":               "2a01:4f8:111:4221::",
-			"mask":             64,
-			"gateway":          "2a01:4f8:111:4221::1",
-			"server_ip":        "88.198.123.123",
-			"server_number":    321,
-			"failover":         false,
-			"locked":           false,
+func subnetFixture() string {
+	return `{
+		"subnet": {
+			"ip": "123.123.123.123",
+			"mask": 29,
+			"gateway": "123.123.123.123",
+			"server_ip": "88.198.123.123",
+			"server_number": 321,
+			"failover": false,
+			"locked": false,
 			"traffic_warnings": false,
-			"traffic_hourly":   100,
-			"traffic_daily":    500,
-			"traffic_monthly":  2,
-		},
-	}
+			"traffic_hourly": 100,
+			"traffic_daily": 500,
+			"traffic_monthly": 2
+		}
+	}`
 }
 
 func TestSubnetService_List(t *testing.T) {
@@ -53,7 +52,41 @@ func TestSubnetService_List(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]any{subnetFixture()})
+		body := `[
+			{
+				"subnet": {
+					"ip": "123.123.123.123",
+					"mask": 29,
+					"gateway": "123.123.123.123",
+					"server_ip": "88.198.123.123",
+					"server_number": 321,
+					"failover": false,
+					"locked": false,
+					"traffic_warnings": false,
+					"traffic_hourly": 100,
+					"traffic_daily": 500,
+					"traffic_monthly": 2
+				}
+			},
+			{
+				"subnet": {
+					"ip": "178.63.123.123",
+					"mask": 25,
+					"gateway": "178.63.123.124",
+					"server_ip": null,
+					"server_number": 421,
+					"failover": false,
+					"locked": false,
+					"traffic_warnings": false,
+					"traffic_hourly": 100,
+					"traffic_daily": 500,
+					"traffic_monthly": 2
+				}
+			}
+		]`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -62,27 +95,41 @@ func TestSubnetService_List(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Subnet.List returned error: %v", err)
 	}
-	if len(subnets) != 1 || subnets[0].ServerNumber != 321 {
-		t.Errorf("unexpected result: %+v", subnets)
+	if len(subnets) != 2 {
+		t.Fatalf("expected 2 subnets, got %d", len(subnets))
+	}
+	if subnets[0].IP != "123.123.123.123" || subnets[0].ServerNumber != 321 || subnets[0].Mask != 29 {
+		t.Errorf("unexpected result for subnets[0]: %+v", subnets[0])
+	}
+	if subnets[1].IP != "178.63.123.123" || subnets[1].ServerNumber != 421 || subnets[1].ServerIP != "" {
+		t.Errorf("unexpected result for subnets[1]: %+v", subnets[1])
 	}
 }
 
 func TestSubnetService_Get(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/subnet/2a01:4f8:111:4221::" {
+		if r.URL.Path != "/subnet/123.123.123.123" {
 			t.Errorf("expected subnet path, got '%s'", r.URL.Path)
 		}
-		_ = json.NewEncoder(w).Encode(subnetFixture())
+		if _, err := w.Write([]byte(subnetFixture())); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-	subnet, err := client.Subnet.Get(context.Background(), "2a01:4f8:111:4221::")
+	subnet, err := client.Subnet.Get(context.Background(), "123.123.123.123")
 	if err != nil {
 		t.Fatalf("Subnet.Get returned error: %v", err)
 	}
-	if subnet.Mask != 64 {
-		t.Errorf("expected mask 64, got %d", subnet.Mask)
+	if subnet.Mask != 29 {
+		t.Errorf("expected mask 29, got %d", subnet.Mask)
+	}
+	if subnet.Gateway != "123.123.123.123" {
+		t.Errorf("expected gateway '123.123.123.123', got '%s'", subnet.Gateway)
+	}
+	if subnet.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", subnet.ServerNumber)
 	}
 }
 
@@ -97,31 +144,58 @@ func TestSubnetService_Update(t *testing.T) {
 		if r.FormValue("traffic_warnings") != "true" {
 			t.Errorf("traffic_warnings: got '%s'", r.FormValue("traffic_warnings"))
 		}
+		if r.FormValue("traffic_hourly") != "1" {
+			t.Errorf("traffic_hourly: got '%s'", r.FormValue("traffic_hourly"))
+		}
+		if r.FormValue("traffic_daily") != "5" {
+			t.Errorf("traffic_daily: got '%s'", r.FormValue("traffic_daily"))
+		}
 		if r.FormValue("traffic_monthly") != "9" {
 			t.Errorf("traffic_monthly: got '%s'", r.FormValue("traffic_monthly"))
 		}
-		_ = json.NewEncoder(w).Encode(subnetFixture())
+		body := `{
+			"subnet": {
+				"ip": "123.123.123.123",
+				"mask": 29,
+				"gateway": "123.123.123.123",
+				"server_ip": "88.198.123.123",
+				"server_number": 321,
+				"failover": false,
+				"locked": false,
+				"traffic_warnings": true,
+				"traffic_hourly": 100,
+				"traffic_daily": 500,
+				"traffic_monthly": 2
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-	if _, err := client.Subnet.Update(context.Background(), "2a01:4f8:111:4221::", true, 1, 5, 9); err != nil {
+	subnet, err := client.Subnet.Update(context.Background(), "123.123.123.123", true, 1, 5, 9)
+	if err != nil {
 		t.Fatalf("Subnet.Update returned error: %v", err)
+	}
+	if !subnet.TrafficWarnings {
+		t.Error("expected traffic warnings to be enabled in response")
 	}
 }
 
-func subnetMACFixture() map[string]any {
-	return map[string]any{
-		"mac": map[string]any{
-			"ip":   "2a01:4f8:111:4221::",
+func subnetMACFixture(mac string) string {
+	return `{
+		"mac": {
+			"ip": "2a01:4f8:111:4221::",
 			"mask": "64",
-			"mac":  "00:21:85:62:3e:9c",
-			"possible_mac": map[string]any{
+			"mac": "` + mac + `",
+			"possible_mac": {
 				"123.123.123.123": "00:21:85:62:3e:9c",
-				"123.123.123.124": "00:21:85:62:3e:9d",
-			},
-		},
-	}
+				"123.123.123.124": "00:21:85:62:3e:9d"
+			}
+		}
+	}`
 }
 
 func TestSubnetService_GetMAC(t *testing.T) {
@@ -129,7 +203,9 @@ func TestSubnetService_GetMAC(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode(subnetMACFixture())
+		if _, err := w.Write([]byte(subnetMACFixture("00:21:85:62:3e:9c"))); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -140,6 +216,9 @@ func TestSubnetService_GetMAC(t *testing.T) {
 	}
 	if mac.MAC != "00:21:85:62:3e:9c" {
 		t.Errorf("expected mac, got '%s'", mac.MAC)
+	}
+	if mac.Mask != "64" {
+		t.Errorf("expected mask '64', got '%s'", mac.Mask)
 	}
 	if len(mac.PossibleMAC) != 2 {
 		t.Errorf("expected 2 possible_mac entries, got %d", len(mac.PossibleMAC))
@@ -154,16 +233,22 @@ func TestSubnetService_SetMAC(t *testing.T) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse form: %v", err)
 		}
-		if r.FormValue("mac") != "00:21:85:62:3e:9c" {
+		if r.FormValue("mac") != "00:21:85:62:3e:9d" {
 			t.Errorf("expected mac form value, got '%s'", r.FormValue("mac"))
 		}
-		_ = json.NewEncoder(w).Encode(subnetMACFixture())
+		if _, err := w.Write([]byte(subnetMACFixture("00:21:85:62:3e:9d"))); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-	if _, err := client.Subnet.SetMAC(context.Background(), "2a01:4f8:111:4221::", "00:21:85:62:3e:9c"); err != nil {
+	mac, err := client.Subnet.SetMAC(context.Background(), "2a01:4f8:111:4221::", "00:21:85:62:3e:9d")
+	if err != nil {
 		t.Fatalf("Subnet.SetMAC returned error: %v", err)
+	}
+	if mac.MAC != "00:21:85:62:3e:9d" {
+		t.Errorf("expected mac '00:21:85:62:3e:9d', got '%s'", mac.MAC)
 	}
 }
 
@@ -187,23 +272,42 @@ func TestSubnetService_GetCancellation(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"cancellation": map[string]any{
-				"ip":                         "2a01:4f8:111:4221::",
-				"mask":                       "64",
-				"server_number":              321,
-				"earliest_cancellation_date": "2026-06-01",
-				"cancelled":                  false,
-				"cancellation_date":          nil,
-			},
-		})
+		// Doc-verbatim example from GET /subnet/{net-ip}/cancellation. Note
+		// the doc's example body uses the key "cancellation-date" (hyphen)
+		// while the field description table below it documents
+		// "cancellation_date" (underscore) as the field name; the hyphen
+		// form appears to be a documentation typo since it is inconsistent
+		// with every other field in the same object (and with the POST/
+		// DELETE examples for this same resource).
+		body := `{
+			"cancellation": {
+				"ip": "123.123.123.123",
+				"mask": "29",
+				"server_number": 321,
+				"earliest_cancellation_date": "2022-02-11",
+				"cancelled": false,
+				"cancellation_date": null
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
 	}))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-	c, err := client.Subnet.GetCancellation(context.Background(), "2a01:4f8:111:4221::")
+	c, err := client.Subnet.GetCancellation(context.Background(), "123.123.123.123")
 	if err != nil {
 		t.Fatalf("Subnet.GetCancellation returned error: %v", err)
+	}
+	if c.IP != "123.123.123.123" {
+		t.Errorf("expected ip '123.123.123.123', got '%s'", c.IP)
+	}
+	if c.ServerNumber != 321 {
+		t.Errorf("expected server number 321, got %d", c.ServerNumber)
+	}
+	if c.EarliestCancellationDate != "2022-02-11" {
+		t.Errorf("expected earliest_cancellation_date '2022-02-11', got '%s'", c.EarliestCancellationDate)
 	}
 	if c.Cancelled {
 		t.Error("expected cancelled false")

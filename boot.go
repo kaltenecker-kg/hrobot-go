@@ -362,12 +362,15 @@ func (b *BootService) GetWindows(ctx context.Context, serverID ServerID) (*Windo
 	return &windows, nil
 }
 
-// ActivateWindows activates Windows installation.
-func (b *BootService) ActivateWindows(ctx context.Context, serverID ServerID, lang string) (*WindowsConfig, error) {
+// ActivateWindows activates Windows installation. os is the operating
+// system to install (e.g. "Windows Server 2019 Standard Edition"); the doc's
+// Input table for this endpoint lists both lang and os as required.
+func (b *BootService) ActivateWindows(ctx context.Context, serverID ServerID, lang string, os string) (*WindowsConfig, error) {
 	path := fmt.Sprintf("/boot/%s/windows", serverID.String())
 
 	data := url.Values{}
 	data.Set("lang", lang)
+	data.Set("os", os)
 
 	var windows WindowsConfig
 	err := b.client.Post(ctx, path, data, &windows)

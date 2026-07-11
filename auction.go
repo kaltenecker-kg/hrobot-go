@@ -25,7 +25,7 @@ type AuctionServer struct {
 	Distributions   []string       `json:"dist"`
 	Languages       []string       `json:"lang"`
 	Datacenter      *string        `json:"datacenter"`
-	Arch            string         `json:"arch"` // Deprecated: use the CPU field instead.
+	Arch            []int          `json:"arch"` // Deprecated: use the CPU field instead. Available distribution architectures.
 	CPU             string         `json:"cpu"`
 	CPUBenchmark    uint32         `json:"cpu_benchmark"`
 	MemorySize      float64        `json:"memory_size"` // in GB
