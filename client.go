@@ -474,6 +474,21 @@ func (c *Client) PostRaw(ctx context.Context, path string, data string, v any) e
 	return c.handleResponse(ctx, resp, v)
 }
 
+// DeleteRaw performs a DELETE request with a pre-encoded form body.
+// Used when the API expects literal brackets in form keys (e.g. server[]).
+func (c *Client) DeleteRaw(ctx context.Context, path string, data string, v any) error {
+	var body io.Reader
+	if data != "" {
+		body = strings.NewReader(data)
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodDelete, path, body)
+	if err != nil {
+		return err
+	}
+	return c.handleResponse(ctx, resp, v)
+}
+
 // Put performs a PUT request with form data.
 func (c *Client) Put(ctx context.Context, path string, data url.Values, v any) error {
 	var body io.Reader

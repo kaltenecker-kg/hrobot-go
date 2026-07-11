@@ -1,7 +1,11 @@
 package hrobot
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -192,6 +196,73 @@ func TestClientOptions(t *testing.T) {
 		}
 		if client.username != "user" {
 			t.Errorf("username = %s, want user", client.username)
+		}
+	})
+}
+
+func TestClient_DeleteRaw(t *testing.T) {
+	t.Run("sends DELETE with raw body and form content type", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodDelete {
+				t.Errorf("expected DELETE request, got '%s'", r.Method)
+			}
+
+			if r.URL.Path != "/vswitch/12345/server" {
+				t.Errorf("expected path '/vswitch/12345/server', got '%s'", r.URL.Path)
+			}
+
+			contentType := r.Header.Get("Content-Type")
+			if contentType != "application/x-www-form-urlencoded" {
+				t.Errorf("expected Content-Type 'application/x-www-form-urlencoded', got '%s'", contentType)
+			}
+
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read body: %v", err)
+			}
+
+			if string(body) != "server[]=1.2.3.4&server[]=5.6.7.8" {
+				t.Errorf("expected body 'server[]=1.2.3.4&server[]=5.6.7.8', got '%s'", string(body))
+			}
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+		ctx := context.Background()
+
+		err := client.DeleteRaw(ctx, "/vswitch/12345/server", "server[]=1.2.3.4&server[]=5.6.7.8", nil)
+		if err != nil {
+			t.Fatalf("DeleteRaw returned error: %v", err)
+		}
+	})
+
+	t.Run("empty body sends no body", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodDelete {
+				t.Errorf("expected DELETE request, got '%s'", r.Method)
+			}
+
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("failed to read body: %v", err)
+			}
+
+			if len(body) != 0 {
+				t.Errorf("expected empty body, got '%s'", string(body))
+			}
+
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+		ctx := context.Background()
+
+		err := client.DeleteRaw(ctx, "/vswitch/12345/server", "", nil)
+		if err != nil {
+			t.Fatalf("DeleteRaw returned error: %v", err)
 		}
 	})
 }
