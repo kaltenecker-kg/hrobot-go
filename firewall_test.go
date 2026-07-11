@@ -672,9 +672,8 @@ func TestFirewallService_ListTemplates(t *testing.T) {
 }
 
 func TestFirewallService_GetTemplate(t *testing.T) {
-	// Not wrapped with spectest.Handler: spec/robot.yaml lacks a
-	// /firewall/template/{template-id} path (see spec/README.md).
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/template/123" {
 			t.Errorf("expected path '/firewall/template/123', got '%s'", r.URL.Path)
 		}
@@ -734,7 +733,7 @@ func TestFirewallService_GetTemplate(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -863,9 +862,8 @@ func TestFirewallService_CreateTemplate(t *testing.T) {
 }
 
 func TestFirewallService_UpdateTemplate(t *testing.T) {
-	// Not wrapped with spectest.Handler: spec/robot.yaml lacks a
-	// /firewall/template/{template-id} path (see spec/README.md).
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/template/7" {
 			t.Errorf("expected path '/firewall/template/7', got '%s'", r.URL.Path)
 		}
@@ -927,7 +925,7 @@ func TestFirewallService_UpdateTemplate(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -965,11 +963,11 @@ func TestFirewallService_UpdateTemplate(t *testing.T) {
 }
 
 func TestFirewallService_DeleteTemplate(t *testing.T) {
-	// Not wrapped with spectest.Handler: spec/robot.yaml lacks a
-	// /firewall/template/{template-id} path (see spec/README.md).
 	// The doc documents "No output" for this endpoint, so an empty 200
-	// body is correct as-is.
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// body is correct as-is (spec/robot.yaml's response for this operation
+	// has no content schema, matching).
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/template/7" {
 			t.Errorf("expected path '/firewall/template/7', got '%s'", r.URL.Path)
 		}
@@ -978,7 +976,7 @@ func TestFirewallService_DeleteTemplate(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

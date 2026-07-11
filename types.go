@@ -50,8 +50,15 @@ func (s ServerID) String() string {
 }
 
 // IPAddress represents an IP address with additional metadata.
+//
+// GET /ip (list) omits Gateway/Mask/Broadcast; GET /ip/{ip} and
+// POST /ip/{ip} (single-address responses) include them. All three are
+// therefore optional here so the same type can decode either shape.
 type IPAddress struct {
 	IP              net.IP `json:"ip"`
+	Gateway         net.IP `json:"gateway,omitempty"`
+	Mask            int    `json:"mask,omitempty"`
+	Broadcast       net.IP `json:"broadcast,omitempty"`
 	ServerIP        net.IP `json:"server_ip"`
 	ServerNumber    int    `json:"server_number"`
 	Locked          bool   `json:"locked"`
