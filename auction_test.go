@@ -145,6 +145,8 @@ func TestAuctionService_Get_DecodesOrderableAddonPrices(t *testing.T) {
 			"name": "Auction Server #42",
 			"price": "39.00",
 			"cpu": "Intel Xeon E3-1245",
+			"arch": "64",
+			"network_speed": "100 Mbit/s",
 			"orderable_addons": ` + auctionOrderableAddonsJSON + `
 		}`))
 	}))
@@ -156,6 +158,14 @@ func TestAuctionService_Get_DecodesOrderableAddonPrices(t *testing.T) {
 	auction, err := client.Auction.Get(ctx, 42)
 	if err != nil {
 		t.Fatalf("Auction.Get returned error: %v", err)
+	}
+
+	if auction.Arch != "64" {
+		t.Errorf("expected arch '64', got '%s'", auction.Arch)
+	}
+
+	if auction.NetworkSpeed != "100 Mbit/s" {
+		t.Errorf("expected network_speed '100 Mbit/s', got '%s'", auction.NetworkSpeed)
 	}
 
 	if len(auction.OrderableAddons) != 1 {
