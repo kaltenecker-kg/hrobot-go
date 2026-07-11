@@ -211,7 +211,13 @@ func init() {
 }
 
 // UnmarshalJSON parses timestamp and converts to Berlin time.
+// Treats JSON null as the zero time.Time value.
 func (bt *BerlinTime) UnmarshalJSON(data []byte) error {
+	// Handle null
+	if string(data) == "null" {
+		return nil
+	}
+
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
 		return err
@@ -268,8 +274,14 @@ func (f *FlexibleID) UnmarshalJSON(data []byte) error {
 // StringFloat represents a float that is encoded as a string in JSON.
 type StringFloat float64
 
-// UnmarshalJSON handles string-encoded floats.
+// UnmarshalJSON handles string-encoded floats and JSON null.
+// Treats JSON null (and empty string) as the zero value.
 func (sf *StringFloat) UnmarshalJSON(data []byte) error {
+	// Handle null
+	if string(data) == "null" {
+		return nil
+	}
+
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
 		// Try as number directly
@@ -278,6 +290,11 @@ func (sf *StringFloat) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		*sf = StringFloat(f)
+		return nil
+	}
+
+	// Handle empty string as zero value
+	if str == "" {
 		return nil
 	}
 

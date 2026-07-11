@@ -175,6 +175,12 @@ func TestBerlinTimeUnmarshalJSON(t *testing.T) {
 			want:    "2025-10-24 00:00:00 +0200 CEST",
 			wantErr: false,
 		},
+		{
+			name:    "null",
+			input:   `null`,
+			want:    "0001-01-01 00:00:00 +0000 UTC",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -456,5 +462,67 @@ func TestBerlinTimeLocation(t *testing.T) {
 	expectedOffset := 2 * 3600 // 2 hours in seconds
 	if offset != expectedOffset {
 		t.Errorf("Berlin offset = %d, want %d (UTC+2)", offset, expectedOffset)
+	}
+}
+
+func TestStringFloatUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    float64
+		wantErr bool
+	}{
+		{
+			name:    "string float",
+			input:   `"123.4567"`,
+			want:    123.4567,
+			wantErr: false,
+		},
+		{
+			name:    "numeric float",
+			input:   `123.4567`,
+			want:    123.4567,
+			wantErr: false,
+		},
+		{
+			name:    "string zero",
+			input:   `"0"`,
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "numeric zero",
+			input:   `0`,
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "null",
+			input:   `null`,
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "empty string",
+			input:   `""`,
+			want:    0,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sf StringFloat
+			err := json.Unmarshal([]byte(tt.input), &sf)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if float64(sf) != tt.want {
+				t.Errorf("StringFloat = %v, want %v", float64(sf), tt.want)
+			}
+		})
 	}
 }
