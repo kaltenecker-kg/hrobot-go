@@ -9,6 +9,8 @@ import (
 )
 
 // OrderingService provides access to server and addon ordering functions in the Hetzner Robot API.
+//
+// For browsing server market products, see [Client.Auction].
 type OrderingService struct {
 	client *Client
 }
@@ -314,60 +316,12 @@ func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context
 	}
 }
 
-// MarketProduct represents a server available on the auction market.
-type MarketProduct struct {
-	ID            uint32   `json:"id"`
-	Name          string   `json:"name"`
-	Description   []string `json:"description"`
-	Traffic       string   `json:"traffic"`
-	Dist          []string `json:"dist"`
-	Arch          []int    `json:"arch"`
-	Lang          []string `json:"lang"`
-	CPU           string   `json:"cpu"`
-	CPUBenchmark  uint32   `json:"cpu_benchmark"`
-	CPUCount      int      `json:"cpu_count"`
-	MemorySize    float64  `json:"memory_size"`
-	HDDSize       float64  `json:"hdd_size"`
-	HDDText       string   `json:"hdd_text"`
-	HDDCount      uint8    `json:"hdd_count"`
-	Datacenter    string   `json:"datacenter"`
-	NetworkSpeed  string   `json:"network_speed"`
-	Price         string   `json:"price"`
-	PriceSetup    string   `json:"price_setup"`
-	PriceVAT      string   `json:"price_vat"`
-	PriceSetupVAT string   `json:"price_setup_vat"`
-}
-
 // AddonProduct represents an addon product available for order.
 type AddonProduct struct {
 	ID    string     `json:"id"`
 	Name  string     `json:"name"`
 	Type  string     `json:"type"`
 	Price AddonPrice `json:"price"`
-}
-
-// ListMarketProducts retrieves all servers available on the auction market.
-//
-// GET /order/server_market/product.
-func (o *OrderingService) ListMarketProducts(ctx context.Context) ([]MarketProduct, error) {
-	path := "/order/server_market/product"
-	var result []MarketProduct
-	if err := o.client.GetWrappedList(ctx, path, "server_market_product", &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// GetMarketProduct retrieves a specific auction market server by ID.
-//
-// GET /order/server_market/product/{id}.
-func (o *OrderingService) GetMarketProduct(ctx context.Context, productID uint32) (*MarketProduct, error) {
-	path := fmt.Sprintf("/order/server_market/product/%d", productID)
-	var result MarketProduct
-	if err := o.client.Get(ctx, path, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
 }
 
 // ListTransactions lists standard server transaction history from the last 30 days.
