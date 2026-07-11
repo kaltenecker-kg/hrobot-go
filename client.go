@@ -93,7 +93,9 @@ func WithUserAgent(ua string) ClientOption {
 // WithLogger attaches a structured logger. The client emits DEBUG-level
 // events for each request, response, and retry, with attributes such as
 // "method", "url", "status", "attempt", and "retry_after". Pass nil to
-// silence (the default).
+// silence (the default). POST requests are never retried on 5xx or
+// transport errors because they may have side effects; 429/401 are safe to
+// retry because the API did not execute the request.
 //
 // Authorization headers are never logged.
 func WithLogger(logger *slog.Logger) ClientOption {
@@ -275,21 +277,29 @@ func unwrapResponse(data []byte) (json.RawMessage, error) {
 
 // shouldRetry decides whether a response status warrants another attempt.
 // 401 may flap on Hetzner, but invalid credentials should not loop forever,
-// so it is retried at most once. 429 honors Retry-After. 5xx retries with
-// linear backoff.
-func shouldRetry(statusCode, attempt int) bool {
+// so it is retried at most once. 429 honors Retry-After. Both are safe to
+// retry for any method because the API did not execute the request. 5xx
+// retries with linear backoff, but only for idempotent methods (GET, DELETE,
+// PUT): a 5xx response for a POST does not tell us whether the request was
+// executed before failing, so retrying it risks duplicating side effects.
+func shouldRetry(method string, statusCode, attempt int) bool {
 	switch {
 	case statusCode == http.StatusUnauthorized:
 		return attempt == 0
 	case statusCode == http.StatusTooManyRequests:
 		return true
 	case statusCode >= 500:
-		return true
+		return method != http.MethodPost
 	}
 	return false
 }
 
-// doRequest executes an HTTP request with authentication and automatic retry for transient errors.
+// doRequest executes an HTTP request with authentication and automatic
+// retry for transient errors. POST requests are never retried on 5xx
+// responses or transport errors (including timeouts), since the server may
+// have already executed the request before failing and POST is not
+// idempotent; 429 and a single 401 retry remain safe for POST because the
+// API did not execute the request in those cases.
 func (c *Client) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
 	reqURL := c.baseURL + path
 
@@ -340,7 +350,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 		resp, err := c.httpClient.Do(req)
 		if err != nil {
 			lastErr = NewNetworkError("request failed", err)
-			if attempt < maxRetries-1 {
+			if method != http.MethodPost && attempt < maxRetries-1 {
 				if err := sleepCtx(ctx, time.Duration(attempt+1)*500*time.Millisecond); err != nil {
 					return nil, err
 				}
@@ -351,7 +361,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 
 		c.updateRateLimit(resp.Header)
 
-		if shouldRetry(resp.StatusCode, attempt) && attempt < maxRetries-1 {
+		if shouldRetry(method, resp.StatusCode, attempt) && attempt < maxRetries-1 {
 			delay := retryAfter(resp.Header)
 			if delay == 0 {
 				delay = time.Duration(attempt+1) * 500 * time.Millisecond

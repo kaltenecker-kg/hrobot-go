@@ -1,7 +1,11 @@
 package hrobot
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 )
 
@@ -194,4 +198,141 @@ func TestClientOptions(t *testing.T) {
 			t.Errorf("username = %s, want user", client.username)
 		}
 	})
+}
+
+func TestDoRequest_PostNotRetriedOn5xx(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	client := NewClient("user", "pass", WithBaseURL(srv.URL))
+
+	resp, err := client.doRequest(context.Background(), http.MethodPost, "/test", nil)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusInternalServerError)
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Errorf("requests = %d, want 1 (POST must not be retried on 5xx)", got)
+	}
+}
+
+func TestDoRequest_GetRetriedOn5xxThenSucceeds(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&requests, 1)
+		if n <= 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := NewClient("user", "pass", WithBaseURL(srv.URL))
+
+	resp, err := client.doRequest(context.Background(), http.MethodGet, "/test", nil)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if got := atomic.LoadInt32(&requests); got != 3 {
+		t.Errorf("requests = %d, want 3", got)
+	}
+}
+
+func TestDoRequest_PostRetriedOn429ThenSucceeds(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&requests, 1)
+		if n == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	client := NewClient("user", "pass", WithBaseURL(srv.URL))
+
+	resp, err := client.doRequest(context.Background(), http.MethodPost, "/test", nil)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusOK)
+	}
+	if got := atomic.LoadInt32(&requests); got != 2 {
+		t.Errorf("requests = %d, want 2 (POST must retry on 429)", got)
+	}
+}
+
+func TestDoRequest_UnauthorizedRetriedOnceThenFails(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	client := NewClient("user", "pass", WithBaseURL(srv.URL))
+
+	resp, err := client.doRequest(context.Background(), http.MethodPost, "/test", nil)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("status = %d, want %d", resp.StatusCode, http.StatusUnauthorized)
+	}
+	if got := atomic.LoadInt32(&requests); got != 2 {
+		t.Errorf("requests = %d, want 2 (401 retried exactly once)", got)
+	}
+}
+
+func TestShouldRetry(t *testing.T) {
+	tests := []struct {
+		name       string
+		method     string
+		statusCode int
+		attempt    int
+		want       bool
+	}{
+		{"401 first attempt any method retries", http.MethodPost, http.StatusUnauthorized, 0, true},
+		{"401 second attempt does not retry", http.MethodPost, http.StatusUnauthorized, 1, false},
+		{"429 GET retries", http.MethodGet, http.StatusTooManyRequests, 0, true},
+		{"429 POST retries", http.MethodPost, http.StatusTooManyRequests, 0, true},
+		{"5xx GET retries", http.MethodGet, http.StatusInternalServerError, 0, true},
+		{"5xx DELETE retries", http.MethodDelete, http.StatusInternalServerError, 0, true},
+		{"5xx PUT retries", http.MethodPut, http.StatusInternalServerError, 0, true},
+		{"5xx POST does not retry", http.MethodPost, http.StatusInternalServerError, 0, false},
+		{"2xx does not retry", http.MethodGet, http.StatusOK, 0, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := shouldRetry(tt.method, tt.statusCode, tt.attempt)
+			if got != tt.want {
+				t.Errorf("shouldRetry(%s, %d, %d) = %v, want %v", tt.method, tt.statusCode, tt.attempt, got, tt.want)
+			}
+		})
+	}
 }
