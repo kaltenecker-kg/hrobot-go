@@ -48,21 +48,11 @@ type ProductPriceInfo struct {
 
 // ProductAddon represents an addon that can be purchased with a product server.
 type ProductAddon struct {
-	ID     string              `json:"id"`
-	Name   string              `json:"name"`
-	Min    uint32              `json:"min"`
-	Max    uint32              `json:"max"`
-	Prices []ProductAddonPrice `json:"price"`
-}
-
-// ProductAddonPrice represents the price for an addon in a specific location.
-type ProductAddonPrice struct {
-	Location        string  `json:"location"`
-	Price           float64 `json:"price"`
-	PriceSetup      float64 `json:"price_setup"`
-	PriceMonthly    float64 `json:"price_monthly"`
-	PriceMonthlyVAT float64 `json:"price_monthly_vat"`
-	PriceSetupVAT   float64 `json:"price_setup_vat"`
+	ID     string       `json:"id"`
+	Name   string       `json:"name"`
+	Min    uint32       `json:"min"`
+	Max    uint32       `json:"max"`
+	Prices []AddonPrice `json:"prices"`
 }
 
 // AuthorizationMethod specifies how to authorize access to a newly provisioned server.
@@ -350,11 +340,11 @@ type MarketProduct struct {
 
 // AddonProduct represents an addon product available for order.
 type AddonProduct struct {
-	ID     string              `json:"id"`
-	Name   string              `json:"name"`
-	Min    uint32              `json:"min"`
-	Max    uint32              `json:"max"`
-	Prices []ProductAddonPrice `json:"prices"`
+	ID     string       `json:"id"`
+	Name   string       `json:"name"`
+	Min    uint32       `json:"min"`
+	Max    uint32       `json:"max"`
+	Prices []AddonPrice `json:"prices"`
 }
 
 // ListMarketProducts retrieves all servers available on the auction market.

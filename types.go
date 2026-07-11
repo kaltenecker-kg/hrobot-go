@@ -301,6 +301,21 @@ func (sf StringFloat) Float64() float64 {
 	return float64(sf)
 }
 
+// PriceDetail holds one net/gross price pair; monthly and (where offered) hourly.
+type PriceDetail struct {
+	Net         StringFloat `json:"net"`
+	Gross       StringFloat `json:"gross"`
+	HourlyNet   StringFloat `json:"hourly_net"`
+	HourlyGross StringFloat `json:"hourly_gross"`
+}
+
+// AddonPrice is one location's pricing for an orderable addon.
+type AddonPrice struct {
+	Location   string      `json:"location"`
+	Price      PriceDetail `json:"price"`
+	PriceSetup PriceDetail `json:"price_setup"`
+}
+
 // PortRange represents a port or range of ports.
 type PortRange struct {
 	Start uint16

@@ -45,22 +45,12 @@ type AuctionServer struct {
 
 // AuctionAddon represents an addon that can be purchased with an auction server.
 type AuctionAddon struct {
-	ID       string              `json:"id"`
-	Name     string              `json:"name"`
-	Location *string             `json:"location"`
-	Min      uint32              `json:"min"`
-	Max      uint32              `json:"max"`
-	Prices   []AuctionAddonPrice `json:"price"`
-}
-
-// AuctionAddonPrice represents the price for an addon in a specific location.
-type AuctionAddonPrice struct {
-	Location        string  `json:"location"`
-	Price           float64 `json:"price"`
-	PriceSetup      float64 `json:"price_setup"`
-	PriceMonthly    float64 `json:"price_monthly"`
-	PriceMonthlyVAT float64 `json:"price_monthly_vat"`
-	PriceSetupVAT   float64 `json:"price_setup_vat"`
+	ID       string       `json:"id"`
+	Name     string       `json:"name"`
+	Location *string      `json:"location"`
+	Min      uint32       `json:"min"`
+	Max      uint32       `json:"max"`
+	Prices   []AddonPrice `json:"prices"`
 }
 
 // NextReduceTime returns the next price reduction time as a time.Time.

@@ -303,3 +303,96 @@ func TestOrderingService_WaitForMarketTransactionCompletion_ErrorIncludesTransac
 		t.Errorf("error %q does not contain transaction ID", err.Error())
 	}
 }
+
+// productOrderableAddonsJSON is a doc-verbatim orderable_addons[].prices
+// fragment for GET /order/server/product(/{id}).
+const productOrderableAddonsJSON = `[
+	{
+		"id": "primary_ipv4",
+		"name": "Primary IPv4",
+		"min": 0,
+		"max": 1,
+		"prices": [
+			{
+				"location": "FSN1",
+				"price": { "net": "1.7000", "gross": "1.7000", "hourly_net": "0.0027", "hourly_gross": "0.0027" },
+				"price_setup": { "net": "0.0000", "gross": "0.0000" }
+			}
+		]
+	}
+]`
+
+func TestOrderingService_GetProduct_DecodesOrderableAddonPrices(t *testing.T) {
+	client := newTestOrderingClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/order/server/product/EX40" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"id": "EX40",
+			"name": "EX40",
+			"orderable_addons": ` + productOrderableAddonsJSON + `
+		}`))
+	})
+
+	product, err := client.Ordering.GetProduct(context.Background(), "EX40")
+	if err != nil {
+		t.Fatalf("GetProduct() error = %v", err)
+	}
+
+	if len(product.OrderableAddons) != 1 {
+		t.Fatalf("expected 1 orderable addon, got %d", len(product.OrderableAddons))
+	}
+
+	addon := product.OrderableAddons[0]
+	if len(addon.Prices) != 1 {
+		t.Fatalf("expected 1 price entry, got %d", len(addon.Prices))
+	}
+
+	price := addon.Prices[0]
+	if price.Location != "FSN1" {
+		t.Errorf("Location = %q, want %q", price.Location, "FSN1")
+	}
+	if price.Price.Net.Float64() != 1.7 {
+		t.Errorf("Price.Net = %v, want 1.7", price.Price.Net.Float64())
+	}
+	if price.Price.Gross.Float64() != 1.7 {
+		t.Errorf("Price.Gross = %v, want 1.7", price.Price.Gross.Float64())
+	}
+	if price.Price.HourlyNet.Float64() != 0.0027 {
+		t.Errorf("Price.HourlyNet = %v, want 0.0027", price.Price.HourlyNet.Float64())
+	}
+	if price.PriceSetup.Net.Float64() != 0 {
+		t.Errorf("PriceSetup.Net = %v, want 0", price.PriceSetup.Net.Float64())
+	}
+}
+
+func TestOrderingService_ListProducts_DecodesOrderableAddonPrices(t *testing.T) {
+	client := newTestOrderingClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[
+			{
+				"product": {
+					"id": "EX40",
+					"name": "EX40",
+					"orderable_addons": ` + productOrderableAddonsJSON + `
+				}
+			}
+		]`))
+	})
+
+	products, err := client.Ordering.ListProducts(context.Background())
+	if err != nil {
+		t.Fatalf("ListProducts() error = %v", err)
+	}
+	if len(products) != 1 {
+		t.Fatalf("expected 1 product, got %d", len(products))
+	}
+
+	if len(products[0].OrderableAddons) != 1 || len(products[0].OrderableAddons[0].Prices) != 1 {
+		t.Fatalf("expected 1 orderable addon with 1 price, got %+v", products[0].OrderableAddons)
+	}
+	if products[0].OrderableAddons[0].Prices[0].Price.Net.Float64() != 1.7 {
+		t.Errorf("Price.Net = %v, want 1.7", products[0].OrderableAddons[0].Prices[0].Price.Net.Float64())
+	}
+}
