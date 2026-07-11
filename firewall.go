@@ -24,8 +24,9 @@ type FirewallStatus string
 
 // Firewall status values reported by the API.
 const (
-	FirewallStatusActive   FirewallStatus = "active"
-	FirewallStatusDisabled FirewallStatus = "disabled"
+	FirewallStatusActive    FirewallStatus = "active"
+	FirewallStatusDisabled  FirewallStatus = "disabled"
+	FirewallStatusInProcess FirewallStatus = "in process"
 )
 
 // FirewallRule represents a single firewall rule.
@@ -296,7 +297,7 @@ func (f *FirewallService) WaitForFirewallReady(ctx context.Context, serverID Ser
 			return false, err
 		}
 		// Check if status is not "in process"
-		return config.Status != "in process", nil
+		return config.Status != FirewallStatusInProcess, nil
 	})
 }
 
