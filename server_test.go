@@ -41,7 +41,7 @@ func TestServerService_List(t *testing.T) {
 					"server_name":   "server2",
 					"product":       "AX41",
 					"dc":            "NBG1-DC3",
-					"traffic":       5368709120,
+					"traffic":       "5 TB",
 					"status":        "ready",
 					"cancelled":     false,
 					"paid_until":    "2024-11-30",
@@ -86,6 +86,14 @@ func TestServerService_List(t *testing.T) {
 
 	if servers[1].ServerNumber != 456 {
 		t.Errorf("expected server number 456, got %d", servers[1].ServerNumber)
+	}
+
+	// Check the "5 TB" traffic parsing
+	if servers[1].Traffic.Bytes != 5497558138880 {
+		t.Errorf("expected traffic bytes 5497558138880 (5 TB), got %d", servers[1].Traffic.Bytes)
+	}
+	if servers[1].Traffic.Raw != "5 TB" {
+		t.Errorf("expected traffic Raw '5 TB', got '%s'", servers[1].Traffic.Raw)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -85,22 +86,65 @@ const (
 type TrafficSize struct {
 	Unlimited bool
 	Bytes     uint64
+	Raw       string
 }
 
-// UnmarshalJSON handles "unlimited" string and numeric values.
+// UnmarshalJSON handles "unlimited" string, human-readable strings like "5 TB", and numeric values.
 func (t *TrafficSize) UnmarshalJSON(data []byte) error {
+	// Handle null
+	if string(data) == "null" {
+		return nil
+	}
+
 	var str string
 	if err := json.Unmarshal(data, &str); err == nil {
+		t.Raw = str // Always preserve the original wire value
+
+		// Handle "unlimited"
 		if str == "unlimited" {
 			t.Unlimited = true
 			return nil
 		}
-		// Try parsing as numeric string
-		bytes, err := strconv.ParseUint(str, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid traffic size: %s", str)
+
+		// Try parsing as human-readable format: number + unit (case-insensitive)
+		// Pattern: ^\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*$
+		pattern := regexp.MustCompile(`(?i)^\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*$`)
+		matches := pattern.FindStringSubmatch(str)
+		if len(matches) == 3 {
+			numStr := matches[1]
+			unit := strings.ToUpper(matches[2])
+
+			// Parse the numeric part
+			num, err := strconv.ParseFloat(numStr, 64)
+			if err == nil {
+				// Calculate multiplier based on unit
+				multiplier := uint64(1)
+				switch unit {
+				case "B":
+					multiplier = 1
+				case "KB":
+					multiplier = 1024
+				case "MB":
+					multiplier = 1024 * 1024
+				case "GB":
+					multiplier = 1024 * 1024 * 1024
+				case "TB":
+					multiplier = 1024 * 1024 * 1024 * 1024
+				}
+
+				t.Bytes = uint64(num * float64(multiplier))
+				return nil
+			}
 		}
-		t.Bytes = bytes
+
+		// Try parsing as pure-digit string (legacy behavior)
+		bytes, err := strconv.ParseUint(str, 10, 64)
+		if err == nil {
+			t.Bytes = bytes
+			return nil
+		}
+
+		// Unknown string - don't fail, just preserve Raw and leave Bytes = 0
 		return nil
 	}
 
@@ -113,17 +157,23 @@ func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON encodes TrafficSize as the string "unlimited" or as a number
-// of bytes.
+// MarshalJSON encodes TrafficSize. If Raw is set, emit it as a JSON string;
+// otherwise encode as "unlimited" or as a number of bytes.
 func (t TrafficSize) MarshalJSON() ([]byte, error) {
+	if t.Raw != "" {
+		return json.Marshal(t.Raw)
+	}
 	if t.Unlimited {
 		return json.Marshal("unlimited")
 	}
 	return json.Marshal(t.Bytes)
 }
 
-// String returns "unlimited" or a human-readable byte count.
+// String returns the Raw value if set, otherwise "unlimited" or a human-readable byte count.
 func (t TrafficSize) String() string {
+	if t.Raw != "" {
+		return t.Raw
+	}
 	if t.Unlimited {
 		return "unlimited"
 	}
