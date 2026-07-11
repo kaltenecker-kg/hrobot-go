@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestFailoverService_List(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/failover" {
 			t.Errorf("expected path '/failover', got '%s'", r.URL.Path)
 		}
@@ -42,7 +45,7 @@ func TestFailoverService_List(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -127,9 +130,10 @@ func TestFailoverService_Get(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != tt.wantPath {
 					t.Errorf("expected path '%s', got '%s'", tt.wantPath, r.URL.Path)
 				}
@@ -141,7 +145,7 @@ func TestFailoverService_Get(t *testing.T) {
 				if _, err := w.Write([]byte(tt.body)); err != nil {
 					t.Fatalf("failed to write response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -208,9 +212,10 @@ func TestFailoverService_Update(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				expectedPath := "/failover/" + tt.ip
 				if r.URL.Path != expectedPath {
 					t.Errorf("expected path '%s', got '%s'", expectedPath, r.URL.Path)
@@ -231,7 +236,7 @@ func TestFailoverService_Update(t *testing.T) {
 				if _, err := w.Write([]byte(tt.body)); err != nil {
 					t.Fatalf("failed to write response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -252,7 +257,8 @@ func TestFailoverService_Update(t *testing.T) {
 }
 
 func TestFailoverService_Delete(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/failover/123.123.123.123" {
 			t.Errorf("expected path '/failover/123.123.123.123', got '%s'", r.URL.Path)
 		}
@@ -274,7 +280,7 @@ func TestFailoverService_Delete(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -325,9 +331,10 @@ func TestFailoverService_ErrorHandling(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"error": map[string]any{
@@ -336,7 +343,7 @@ func TestFailoverService_ErrorHandling(t *testing.T) {
 						"message": "test error",
 					},
 				})
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

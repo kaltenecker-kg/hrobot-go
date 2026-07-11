@@ -7,10 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestKeyService_List(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/key" {
 			t.Errorf("Expected path '/key', got '%s'", r.URL.Path)
 		}
@@ -43,7 +46,7 @@ func TestKeyService_List(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("Failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -78,7 +81,8 @@ func TestKeyService_List(t *testing.T) {
 func TestKeyService_Get(t *testing.T) {
 	fingerprint := "d7:34:1c:8c:4e:20:e0:1f:07:66:45:d9:97:22:ec:07"
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		expectedPath := "/key/" + fingerprint
 		if r.URL.Path != expectedPath {
 			t.Errorf("Expected path '%s', got '%s'", expectedPath, r.URL.Path)
@@ -100,7 +104,7 @@ func TestKeyService_Get(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("Failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -121,7 +125,8 @@ func TestKeyService_Get(t *testing.T) {
 }
 
 func TestKeyService_Create(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/key" {
 			t.Errorf("Expected path '/key', got '%s'", r.URL.Path)
 		}
@@ -144,6 +149,8 @@ func TestKeyService_Create(t *testing.T) {
 			t.Errorf("Unexpected data value")
 		}
 
+		// Doc: "the status code 201 CREATED is returned" for POST /key.
+		w.WriteHeader(http.StatusCreated)
 		response := map[string]any{
 			"key": map[string]any{
 				"name":        name,
@@ -157,7 +164,7 @@ func TestKeyService_Create(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("Failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -180,7 +187,8 @@ func TestKeyService_Create(t *testing.T) {
 func TestKeyService_Rename(t *testing.T) {
 	fingerprint := "d7:34:1c:8c:4e:20:e0:1f:07:66:45:d9:97:22:ec:07"
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		expectedPath := "/key/" + fingerprint
 		if r.URL.Path != expectedPath {
 			t.Errorf("Expected path '%s', got '%s'", expectedPath, r.URL.Path)
@@ -211,7 +219,7 @@ func TestKeyService_Rename(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("Failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -230,7 +238,8 @@ func TestKeyService_Rename(t *testing.T) {
 func TestKeyService_Delete(t *testing.T) {
 	fingerprint := "d7:34:1c:8c:4e:20:e0:1f:07:66:45:d9:97:22:ec:07"
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		expectedPath := "/key/" + fingerprint
 		if r.URL.Path != expectedPath {
 			t.Errorf("Expected path '%s', got '%s'", expectedPath, r.URL.Path)
@@ -240,7 +249,7 @@ func TestKeyService_Delete(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

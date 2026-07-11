@@ -3,7 +3,9 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/url"
+	"strings"
 )
 
 // TrafficService provides access to traffic related functions in the Hetzner Robot API.
@@ -52,11 +54,18 @@ type TrafficStats struct {
 //   - day: YYYY-MM-DDTHH (e.g., "2025-01-15T14")
 //   - month: YYYY-MM-DD (e.g., "2025-01-15")
 //   - year: YYYY-MM (e.g., "2025-01")
+//
+// The doc documents "ip[]" and "subnet[]" as the request's IP/subnet
+// parameters (each accepting one or more values); IP and Subnet are
+// single-value convenience fields that are merged into IPs/Subnets when
+// set, so callers querying a single IP don't need to build a slice.
 type TrafficGetParams struct {
 	Type         TrafficType // Type of data (day, month, year)
 	From         string      // Start date (format depends on Type; see comments)
 	To           string      // End date (format depends on Type; see comments)
-	IP           string      // Server IP address (optional; omit for all IPs)
+	IP           string      // Single server IP address (optional; shorthand for IPs)
+	IPs          []string    // One or more server IP addresses (optional)
+	Subnets      []string    // One or more subnet addresses (optional)
 	SingleValues bool        // Return single values per day/month/year
 }
 
@@ -68,7 +77,10 @@ type TrafficGetParams struct {
 func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*ServerTrafficData, error) {
 	path := "/traffic"
 
-	// Build form data (API uses POST, not GET)
+	// Build form data (API uses POST, not GET). Scalar fields go through
+	// url.Values as usual; ip[]/subnet[] use literal (non-percent-encoded)
+	// bracket keys per the doc's examples, the same convention
+	// VSwitchService.AddServers uses for server[].
 	formData := url.Values{}
 	formData.Set("type", string(params.Type))
 	formData.Set("from", params.From)
@@ -80,6 +92,10 @@ func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*Ser
 		formData.Set("single_values", "true")
 	}
 
+	body := formData.Encode()
+	body = appendBracketArray(body, "ip", params.IPs)
+	body = appendBracketArray(body, "subnet", params.Subnets)
+
 	// The shape of the "data" field depends on whether single_values was
 	// requested: an aggregate per IP by default, or per-interval values
 	// per IP with single_values=true. Decode it separately based on which
@@ -90,7 +106,7 @@ func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*Ser
 		To   string          `json:"to"`
 		Data json.RawMessage `json:"data"`
 	}
-	if err := t.client.Post(ctx, path, formData, &raw); err != nil {
+	if err := t.client.PostRaw(ctx, path, body, &raw); err != nil {
 		return nil, err
 	}
 
@@ -113,4 +129,20 @@ func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*Ser
 	}
 
 	return &result, nil
+}
+
+// appendBracketArray appends "<name>[]=<value>" pairs for each value to an
+// already-encoded form body, joined with "&". The Robot API requires
+// literal (non-percent-encoded) brackets in these keys, so this bypasses
+// url.Values.Encode (which would escape them).
+func appendBracketArray(body, name string, values []string) string {
+	for _, v := range values {
+		pair := fmt.Sprintf("%s[]=%s", name, url.QueryEscape(v))
+		if body == "" {
+			body = pair
+		} else {
+			body = strings.Join([]string{body, pair}, "&")
+		}
+	}
+	return body
 }
