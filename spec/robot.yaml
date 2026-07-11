@@ -1,0 +1,3308 @@
+openapi: 3.0.3
+info:
+  title: Hetzner Robot API
+  description: |
+    Complete API documentation for Hetzner Robot Web Service.
+    
+    The Hetzner Robot API provides programmatic access to manage dedicated servers, 
+    IP addresses, subnets, firewall configurations, vSwitches, storage boxes, and more.
+    
+    **Authentication:** HTTP Basic Auth
+    **Base URL:** https://robot-ws.your-server.de
+    **Response Format:** JSON (YAML available by appending .yaml to URLs)
+    **Request Format:** application/x-www-form-urlencoded for POST parameters
+  version: 1.0.0
+  contact:
+    name: Hetzner Online GmbH
+    url: https://www.hetzner.com
+  license:
+    name: Hetzner Terms of Service
+    url: https://www.hetzner.com/rechtliches/agb
+
+servers:
+  - url: https://robot-ws.your-server.de
+    description: Production server
+
+security:
+  - basicAuth: []
+
+tags:
+  - name: Server
+    description: Server management operations
+  - name: IP
+    description: IP address management
+  - name: Subnet
+    description: Subnet management
+  - name: Reset
+    description: Server reset operations
+  - name: Failover
+    description: Failover IP management
+  - name: Wake on LAN
+    description: Wake on LAN operations
+  - name: Boot Configuration
+    description: Boot configuration management
+  - name: Reverse DNS
+    description: Reverse DNS management
+  - name: Traffic
+    description: Traffic monitoring
+  - name: SSH Keys
+    description: SSH key management
+  - name: Server Ordering
+    description: Server ordering operations
+  - name: Storage Box
+    description: Storage Box management
+  - name: Firewall
+    description: Firewall configuration
+  - name: vSwitch
+    description: vSwitch management
+
+paths:
+  # Server endpoints
+  /server:
+    get:
+      summary: Get all servers
+      description: Query data of all servers
+      operationId: getServers
+      tags:
+        - Server
+      responses:
+        '200':
+          description: List of servers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServerBasic'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+      x-rate-limit: "200 requests per 1 hour"
+
+  /server/{server-number}:
+    get:
+      summary: Get specific server
+      description: Query server data for a specific server
+      operationId: getServer
+      tags:
+        - Server
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Server data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerDetailed'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Update server name
+      description: Update server name for a specific server
+      operationId: updateServerName
+      tags:
+        - Server
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - server_name
+              properties:
+                server_name:
+                  type: string
+                  description: Server name
+                  example: "server1"
+      responses:
+        '200':
+          description: Server name updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerDetailed'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+      x-rate-limit: "200 requests per 1 hour"
+
+  /server/{server-number}/cancellation:
+    get:
+      summary: Get server cancellation status
+      description: Query cancellation data for a server
+      operationId: getServerCancellation
+      tags:
+        - Server
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Cancellation data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerCancellation'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Cancel server
+      description: Cancel a server
+      operationId: cancelServer
+      tags:
+        - Server
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - cancellation_date
+              properties:
+                cancellation_date:
+                  type: string
+                  description: Date to which the server should be cancelled or "now" to cancel immediately
+                  example: "2014-04-15"
+                cancellation_reason:
+                  type: string
+                  description: Cancellation reason (optional)
+                reserve_location:
+                  type: string
+                  enum: ['true', 'false']
+                  description: Whether server location shall be reserved
+      responses:
+        '200':
+          description: Server cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServerCancellation'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+        '409':
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    delete:
+      summary: Withdraw server cancellation
+      description: Withdraw a server cancellation
+      operationId: withdrawServerCancellation
+      tags:
+        - Server
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Cancellation withdrawn successfully
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+        '409':
+          description: The cancellation cannot be revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+  # IP endpoints
+  /ip:
+    get:
+      summary: Get all IP addresses
+      description: Query list of all single IP addresses
+      operationId: getIPs
+      tags:
+        - IP
+      parameters:
+        - name: server_ip
+          in: query
+          description: Server main IP address, show only IP addresses assigned to this server
+          schema:
+            type: string
+            format: ipv4
+      responses:
+        '200':
+          description: List of IP addresses retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IPAddress'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-rate-limit: "5000 requests per 1 hour"
+
+  /ip/{ip}:
+    get:
+      summary: Get specific IP address
+      description: Query data for a specific IP address
+      operationId: getIP
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: IP address data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPAddressDetailed'
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "5000 requests per 1 hour"
+
+    post:
+      summary: Update IP traffic warnings
+      description: Update traffic warning options for an IP address
+      operationId: updateIPTrafficWarnings
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                traffic_warnings:
+                  type: boolean
+                  description: Enable/disable traffic warnings
+                traffic_hourly:
+                  type: integer
+                  description: Hourly traffic limit in MB
+                traffic_daily:
+                  type: integer
+                  description: Daily traffic limit in MB
+                traffic_monthly:
+                  type: integer
+                  description: Monthly traffic limit in GB
+      responses:
+        '200':
+          description: Traffic warnings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPAddressDetailed'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "5000 requests per 1 hour"
+
+  /ip/{ip}/mac:
+    get:
+      summary: Get separate MAC address
+      description: Query if it is possible to set a separate MAC address. Returns the MAC address if it is set.
+      operationId: getIPMAC
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: MAC address information retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MACAddress'
+        '404':
+          description: MAC address not found or not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "5000 requests per 1 hour"
+
+    put:
+      summary: Generate separate MAC address
+      description: Generate a separate MAC address
+      operationId: generateIPMAC
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: MAC address generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MACAddress'
+        '404':
+          description: IP address not found or MAC not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: MAC address already set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "10 requests per 1 hour"
+
+    delete:
+      summary: Remove separate MAC address
+      description: Remove a separate MAC address
+      operationId: removeIPMAC
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: MAC address removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MACAddress'
+        '404':
+          description: IP address not found or MAC not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No separate MAC address set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "10 requests per 1 hour"
+
+  /ip/{ip}/cancellation:
+    get:
+      summary: Get IP cancellation status
+      description: Query cancellation data for an IP
+      operationId: getIPCancellation
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: Cancellation data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPCancellation'
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: It's not possible to cancel this IP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Cancel IP address
+      description: Cancel an IP address
+      operationId: cancelIP
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - cancellation_date
+              properties:
+                cancellation_date:
+                  type: string
+                  description: Date which you want the IP cancellation to go into effect or "now" to cancel immediately
+                  example: "2022-02-11"
+      responses:
+        '200':
+          description: IP cancelled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPCancellation'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The IP address cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    delete:
+      summary: Revoke IP cancellation
+      description: Revoke an IP cancellation
+      operationId: revokeIPCancellation
+      tags:
+        - IP
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: IP cancellation revoked successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IPCancellation'
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The IP address cancellation cannot be revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+  # Subnet endpoints
+  /subnet:
+    get:
+      summary: Get all subnets
+      description: Query list of all subnets
+      operationId: getSubnets
+      tags:
+        - Subnet
+      parameters:
+        - name: server_ip
+          in: query
+          description: Server main IP address, show only subnets assigned to this server
+          schema:
+            type: string
+            format: ipv4
+      responses:
+        '200':
+          description: List of subnets retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Subnet'
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-rate-limit: "5000 requests per 1 hour"
+
+  /subnet/{net-ip}:
+    get:
+      summary: Get specific subnet
+      description: Query data of a specific subnet
+      operationId: getSubnet
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      responses:
+        '200':
+          description: Subnet data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subnet'
+        '404':
+          description: Subnet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "5000 requests per 1 hour"
+
+    post:
+      summary: Update subnet traffic warnings
+      description: Update traffic warning options for a subnet
+      operationId: updateSubnetTrafficWarnings
+      tags:
+        - Subnet
+      parameters:
+        - $ref: '#/components/parameters/NetIP'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                traffic_warnings:
+                  type: boolean
+                  description: Enable/disable traffic warnings
+                traffic_hourly:
+                  type: integer
+                  description: Hourly traffic limit in MB
+                traffic_daily:
+                  type: integer
+                  description: Daily traffic limit in MB
+                traffic_monthly:
+                  type: integer
+                  description: Monthly traffic limit in GB
+      responses:
+        '200':
+          description: Traffic warnings updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Subnet'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Subnet not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "5000 requests per 1 hour"
+
+  # Reset endpoints
+  /reset:
+    get:
+      summary: Get reset options for all servers
+      description: Query reset options for all servers
+      operationId: getResetOptions
+      tags:
+        - Reset
+      responses:
+        '200':
+          description: Reset options retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ResetOptions'
+        '404':
+          description: No servers with reset option found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /reset/{server-number}:
+    get:
+      summary: Get reset options for specific server
+      description: Query reset options for a specific server
+      operationId: getServerResetOptions
+      tags:
+        - Reset
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Reset options retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetOptionsDetailed'
+        '404':
+          description: Server not found or reset not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Execute server reset
+      description: Execute reset on specific server
+      operationId: executeServerReset
+      tags:
+        - Reset
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - type
+              properties:
+                type:
+                  type: string
+                  description: Reset type to execute
+                  enum: [sw, hw, man, power, power_long]
+                  example: "hw"
+      responses:
+        '200':
+          description: Reset executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResetResult'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Server not found or reset not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: There is already a running manual reset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "50 requests per hour"
+
+  # Failover endpoints
+  /failover:
+    get:
+      summary: Get all failover IPs
+      description: Query failover data for all servers
+      operationId: getFailoverIPs
+      tags:
+        - Failover
+      responses:
+        '200':
+          description: Failover IP data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FailoverIP'
+        '404':
+          description: No failover IP addresses found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "100 requests per 1 hour"
+
+  /failover/{failover-ip}:
+    get:
+      summary: Get specific failover IP
+      description: Query specific failover IP address data
+      operationId: getFailoverIP
+      tags:
+        - Failover
+      parameters:
+        - $ref: '#/components/parameters/FailoverIP'
+      responses:
+        '200':
+          description: Failover IP data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailoverIP'
+        '404':
+          description: Failover IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "100 requests per 1 hour"
+
+    post:
+      summary: Switch failover IP routing
+      description: Switch routing of failover IP address to another server
+      operationId: switchFailoverIP
+      tags:
+        - Failover
+      parameters:
+        - $ref: '#/components/parameters/FailoverIP'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - active_server_ip
+              properties:
+                active_server_ip:
+                  type: string
+                  description: Main IP address of the server where the failover IP should be routed to
+                  example: "124.124.124.124"
+      responses:
+        '200':
+          description: Failover IP switched successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailoverIP'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Failover IP or destination server not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Failover IP switching conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "50 requests per hour"
+
+    delete:
+      summary: Delete failover IP routing
+      description: Delete the routing of a failover IP
+      operationId: deleteFailoverIP
+      tags:
+        - Failover
+      parameters:
+        - $ref: '#/components/parameters/FailoverIP'
+      responses:
+        '200':
+          description: Failover IP routing deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FailoverIP'
+        '404':
+          description: Failover IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Deleting the failover IP routing is blocked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "50 requests per hour"
+
+  # Wake on LAN endpoints
+  /wol/{server-number}:
+    get:
+      summary: Get Wake on LAN availability
+      description: Query Wake On LAN data
+      operationId: getWakeOnLAN
+      tags:
+        - Wake on LAN
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Wake on LAN data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WakeOnLAN'
+        '404':
+          description: Server not found or Wake On LAN not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Send Wake on LAN packet
+      description: Send Wake On LAN packet to server
+      operationId: sendWakeOnLAN
+      tags:
+        - Wake on LAN
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Wake on LAN packet sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WakeOnLAN'
+        '404':
+          description: Server not found or Wake On LAN not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Sending Wake On LAN packet failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "10 requests per 1 hour"
+
+  # Boot Configuration endpoints
+  /boot/{server-number}:
+    get:
+      summary: Get boot configuration status
+      description: Query the current boot configuration status for a server
+      operationId: getBootConfiguration
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Boot configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BootConfiguration'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /boot/{server-number}/rescue:
+    get:
+      summary: Get rescue system options
+      description: Query boot options for the Rescue System
+      operationId: getRescueOptions
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Rescue system options retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescueSystem'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Activate rescue system
+      description: Activate Rescue System
+      operationId: activateRescueSystem
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - os
+              properties:
+                os:
+                  type: string
+                  description: Operating System
+                  enum: [linux, vkvm]
+                  example: "linux"
+                arch:
+                  type: integer
+                  description: Architecture (optional, default 64)
+                  enum: [32, 64]
+                  example: 64
+                  deprecated: true
+                authorized_key:
+                  type: array
+                  items:
+                    type: string
+                  description: One or more SSH key fingerprints (optional)
+                keyboard:
+                  type: string
+                  description: Desired keyboard layout (optional, default us)
+                  example: "us"
+      responses:
+        '200':
+          description: Rescue system activated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescueSystemActivated'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Activation of the Rescue System failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    delete:
+      summary: Deactivate rescue system
+      description: Deactivate Rescue System
+      operationId: deactivateRescueSystem
+      tags:
+        - Boot Configuration
+      parameters:
+        - $ref: '#/components/parameters/ServerNumber'
+      responses:
+        '200':
+          description: Rescue system deactivated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RescueSystem'
+        '404':
+          description: Server not found or boot configuration not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Deactivation of the Rescue System failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  # Reverse DNS endpoints
+  /rdns:
+    get:
+      summary: Get all reverse DNS entries
+      description: Query all rDNS entries
+      operationId: getAllReverseDNS
+      tags:
+        - Reverse DNS
+      parameters:
+        - name: server_ip
+          in: query
+          description: Server main IP address; show only reverse DNS entries assigned to this server
+          schema:
+            type: string
+            format: ipv4
+      responses:
+        '200':
+          description: Reverse DNS entries retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReverseDNS'
+        '404':
+          description: No reverse DNS entries found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /rdns/{ip}:
+    get:
+      summary: Get reverse DNS entry
+      description: Query the current reverse DNS entry for one IP address
+      operationId: getReverseDNS
+      tags:
+        - Reverse DNS
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: Reverse DNS entry retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReverseDNS'
+        '404':
+          description: IP address not found or no reverse DNS entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    put:
+      summary: Create reverse DNS entry
+      description: Create new reverse DNS entry for one IP address
+      operationId: createReverseDNS
+      tags:
+        - Reverse DNS
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - ptr
+              properties:
+                ptr:
+                  type: string
+                  description: PTR record
+                  example: "testen.de"
+      responses:
+        '201':
+          description: Reverse DNS entry created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReverseDNS'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: There is already an existing reverse DNS entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Update/create reverse DNS entry
+      description: Update/create a reverse DNS entry for one IP
+      operationId: updateReverseDNS
+      tags:
+        - Reverse DNS
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - ptr
+              properties:
+                ptr:
+                  type: string
+                  description: PTR record
+                  example: "testen.de"
+      responses:
+        '200':
+          description: Reverse DNS entry updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReverseDNS'
+        '201':
+          description: Reverse DNS entry created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReverseDNS'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    delete:
+      summary: Delete reverse DNS entry
+      description: Delete reverse DNS entry for one IP
+      operationId: deleteReverseDNS
+      tags:
+        - Reverse DNS
+      parameters:
+        - $ref: '#/components/parameters/IPAddress'
+      responses:
+        '200':
+          description: Reverse DNS entry deleted successfully
+        '404':
+          description: IP address not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  # Traffic endpoints
+  /traffic:
+    post:
+      summary: Request traffic data
+      description: Request traffic data for servers and IPs
+      operationId: requestTrafficData
+      tags:
+        - Traffic
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                server_ip:
+                  type: string
+                  description: Server IP address
+                type:
+                  type: string
+                  enum: [day, month, year]
+                  description: Traffic data type
+                from:
+                  type: string
+                  format: date
+                  description: Start date
+                to:
+                  type: string
+                  format: date
+                  description: End date
+      responses:
+        '200':
+          description: Traffic data request successful
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+      x-rate-limit: "100 requests per 1 hour"
+
+  # SSH Keys endpoints
+  /key:
+    get:
+      summary: Get all SSH keys
+      description: Query all SSH keys
+      operationId: getSSHKeys
+      tags:
+        - SSH Keys
+      responses:
+        '200':
+          description: SSH keys retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SSHKey'
+        '404':
+          description: No keys found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Add SSH key
+      description: Add a new SSH key
+      operationId: addSSHKey
+      tags:
+        - SSH Keys
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - name
+                - data
+              properties:
+                name:
+                  type: string
+                  description: SSH key name
+                  example: "NewKey"
+                data:
+                  type: string
+                  description: SSH key data in OpenSSH or SSH2 format
+                  example: "ssh-rsa AAAAB3NzaC1yc+..."
+      responses:
+        '201':
+          description: SSH key added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SSHKey'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '409':
+          description: The supplied key already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+  /key/{fingerprint}:
+    get:
+      summary: Get specific SSH key
+      description: Query a specific SSH key
+      operationId: getSSHKey
+      tags:
+        - SSH Keys
+      parameters:
+        - $ref: '#/components/parameters/SSHKeyFingerprint'
+      responses:
+        '200':
+          description: SSH key retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SSHKey'
+        '404':
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Update SSH key name
+      description: Update the key name
+      operationId: updateSSHKeyName
+      tags:
+        - SSH Keys
+      parameters:
+        - $ref: '#/components/parameters/SSHKeyFingerprint'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: SSH key name
+                  example: "MyTestKey"
+      responses:
+        '200':
+          description: SSH key name updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SSHKey'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    delete:
+      summary: Remove SSH key
+      description: Remove public key
+      operationId: removeSSHKey
+      tags:
+        - SSH Keys
+      parameters:
+        - $ref: '#/components/parameters/SSHKeyFingerprint'
+      responses:
+        '200':
+          description: SSH key removed successfully
+        '404':
+          description: Key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+  # Storage Box endpoints
+  /storagebox:
+    get:
+      summary: Get all Storage Boxes
+      description: Query data of all Storage Boxes
+      operationId: getStorageBoxes
+      tags:
+        - Storage Box
+      parameters:
+        - name: linked_server
+          in: query
+          description: Linked Server ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Storage Boxes retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageBoxBasic'
+        '404':
+          description: No Storage Boxes found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+  /storagebox/{storagebox-id}:
+    get:
+      summary: Get specific Storage Box
+      description: Query data of a specific Storage Box
+      operationId: getStorageBox
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      responses:
+        '200':
+          description: Storage Box data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageBoxDetailed'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Update Storage Box
+      description: Update a specific Storage Box
+      operationId: updateStorageBox
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                storagebox_name:
+                  type: string
+                  description: Name of the Storage Box
+                samba:
+                  type: boolean
+                  description: Status of Samba
+                webdav:
+                  type: boolean
+                  description: Status of WebDAV
+                ssh:
+                  type: boolean
+                  description: Status of SSH-Support
+                external_reachability:
+                  type: boolean
+                  description: Status of external reachability
+                zfs:
+                  type: boolean
+                  description: Status of ZFS directory
+      responses:
+        '200':
+          description: Storage Box updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageBoxDetailed'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  # Firewall endpoints
+  /firewall/{server-id}:
+    get:
+      summary: Get firewall configuration
+      description: Get the firewall configuration for a server
+      operationId: getFirewallConfiguration
+      tags:
+        - Firewall
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200':
+          description: Firewall configuration retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirewallConfiguration'
+        '404':
+          description: Server not found or firewall not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Apply firewall configuration
+      description: Apply a new firewall configuration
+      operationId: applyFirewallConfiguration
+      tags:
+        - Firewall
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [active, disabled]
+                  description: Change the status of the firewall
+                filter_ipv6:
+                  type: boolean
+                  description: Activate or deactivate the IPv6 filter
+                whitelist_hos:
+                  type: boolean
+                  description: Change the flag of Hetzner services whitelisting
+                template_id:
+                  type: integer
+                  description: Template ID (not possible in combination with whitelist_hos and rules)
+                rules:
+                  type: object
+                  description: Firewall rules
+                  properties:
+                    input:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FirewallRule'
+                    output:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FirewallRule'
+      responses:
+        '200':
+          description: Firewall configuration applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirewallConfiguration'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Server not found or firewall not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Firewall configuration conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    delete:
+      summary: Clear firewall configuration
+      description: Clear firewall configuration of a server
+      operationId: clearFirewallConfiguration
+      tags:
+        - Firewall
+      parameters:
+        - $ref: '#/components/parameters/ServerId'
+      responses:
+        '200':
+          description: Firewall configuration cleared successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirewallConfiguration'
+        '404':
+          description: Server not found or firewall not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Firewall cannot be cleared
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+  /firewall/template:
+    get:
+      summary: Get firewall templates
+      description: Get list of available firewall templates
+      operationId: getFirewallTemplates
+      tags:
+        - Firewall
+      responses:
+        '200':
+          description: Firewall templates retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FirewallTemplate'
+        '404':
+          description: No firewall templates found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Create firewall template
+      description: Create a new firewall template
+      operationId: createFirewallTemplate
+      tags:
+        - Firewall
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - name
+                - whitelist_hos
+                - is_default
+              properties:
+                name:
+                  type: string
+                  description: Template name
+                filter_ipv6:
+                  type: boolean
+                  description: Activate or deactivate the IPv6 filter
+                whitelist_hos:
+                  type: boolean
+                  description: Flag of Hetzner services whitelisting
+                is_default:
+                  type: boolean
+                  description: If true the template is selected by default in the Robot webpanel
+                rules:
+                  type: object
+                  description: Firewall rules
+      responses:
+        '201':
+          description: Firewall template created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirewallTemplateDetailed'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+      x-rate-limit: "500 requests per 1 hour"
+
+  # vSwitch endpoints
+  /vswitch:
+    get:
+      summary: Get all vSwitches
+      description: Query data of all vSwitches
+      operationId: getVSwitches
+      tags:
+        - vSwitch
+      responses:
+        '200':
+          description: List of vSwitches retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VSwitchBasic'
+              example:
+                - id: 1234
+                  name: "vswitch 1234"
+                  vlan: 4000
+                  cancelled: false
+                - id: 4321
+                  name: "vswitch test"
+                  vlan: 4001
+                  cancelled: false
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Create new vSwitch
+      description: Create a new vSwitch with specified name and VLAN ID
+      operationId: createVSwitch
+      tags:
+        - vSwitch
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - name
+                - vlan
+              properties:
+                name:
+                  type: string
+                  description: vSwitch name
+                  example: "my vSwitch"
+                vlan:
+                  type: integer
+                  minimum: 4000
+                  maximum: 4091
+                  description: VLAN ID (range from 4000 to 4091)
+                  example: 4000
+      responses:
+        '201':
+          description: vSwitch created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VSwitchDetailed'
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+        '409':
+          description: vSwitch limit reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error:
+                  status: 409
+                  code: "VSWITCH_LIMIT_REACHED"
+                  message: "The maximum count of vSwitches is reached"
+      x-rate-limit: "100 requests per 1 hour"
+
+  /vswitch/{vswitch-id}:
+    get:
+      summary: Get specific vSwitch
+      description: Query detailed data of a specific vSwitch
+      operationId: getVSwitch
+      tags:
+        - vSwitch
+      parameters:
+        - $ref: '#/components/parameters/VSwitchId'
+      responses:
+        '200':
+          description: vSwitch data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VSwitchDetailed'
+        '404':
+          description: vSwitch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+      x-rate-limit: "500 requests per 1 hour"
+
+    post:
+      summary: Update vSwitch
+      description: Change the name or the VLAN ID of a vSwitch
+      operationId: updateVSwitch
+      tags:
+        - vSwitch
+      parameters:
+        - $ref: '#/components/parameters/VSwitchId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: New vSwitch name
+                  example: "my new name"
+                vlan:
+                  type: integer
+                  minimum: 4000
+                  maximum: 4091
+                  description: New VLAN ID
+                  example: 4001
+      responses:
+        '200':
+          description: vSwitch updated successfully
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          description: vSwitch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Update conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                in_process:
+                  summary: Update in progress
+                  value:
+                    error:
+                      status: 409
+                      code: "VSWITCH_IN_PROCESS"
+                      message: "The vSwitch cannot be updated because a update is currently running"
+                vlan_conflict:
+                  summary: VLAN ID conflict
+                  value:
+                    error:
+                      status: 409
+                      code: "VSWITCH_VLAN_NOT_UNIQUE"
+                      message: "The vSwitch cannot be updated because of a conflicting VLAN ID"
+      x-rate-limit: "100 requests per 1 hour"
+
+    delete:
+      summary: Cancel vSwitch
+      description: Cancel a vSwitch at a specified date
+      operationId: cancelVSwitch
+      tags:
+        - vSwitch
+      parameters:
+        - $ref: '#/components/parameters/VSwitchId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - cancellation_date
+              properties:
+                cancellation_date:
+                  type: string
+                  description: Date to which the vSwitch should be cancelled (format yyyy-MM-dd) or "now" to cancel immediately
+                  example: "2018-06-30"
+                  pattern: '^(\d{4}-\d{2}-\d{2}|now)'
+      responses:
+        '200':
+          description: vSwitch cancelled successfully
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          description: vSwitch not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: vSwitch already cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "100 requests per 1 hour"
+
+  /vswitch/{vswitch-id}/server:
+    post:
+      summary: Add servers to vSwitch
+      description: Add one or more servers to a vSwitch
+      operationId: addServersToVSwitch
+      tags:
+        - vSwitch
+      parameters:
+        - $ref: '#/components/parameters/VSwitchId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - server
+              properties:
+                server:
+                  type: array
+                  items:
+                    type: string
+                  description: One or more server identifiers (server_number or server_ip)
+                  example: ["123.123.123.123", "123.123.123.124"]
+            encoding:
+              server:
+                style: form
+                explode: true
+      responses:
+        '200':
+          description: Servers added to vSwitch successfully
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Add conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "100 requests per 1 hour"
+
+    delete:
+      summary: Remove servers from vSwitch
+      description: Remove one or more servers from a vSwitch
+      operationId: removeServersFromVSwitch
+      tags:
+        - vSwitch
+      parameters:
+        - $ref: '#/components/parameters/VSwitchId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - server
+              properties:
+                server:
+                  type: array
+                  items:
+                    type: string
+                  description: One or more server identifiers (server_number or server_ip)
+                  example: ["123.123.123.123", "123.123.123.124"]
+            encoding:
+              server:
+                style: form
+                explode: true
+      responses:
+        '200':
+          description: Servers removed from vSwitch successfully
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/RateLimited'
+        '404':
+          description: Resource not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Remove conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "100 requests per 1 hour"
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: HTTP Basic Authentication using Robot webservice username and password
+
+  parameters:
+    ServerNumber:
+      name: server-number
+      in: path
+      required: true
+      description: Server ID
+      schema:
+        type: integer
+        example: 321
+
+    ServerId:
+      name: server-id
+      in: path
+      required: true
+      description: Server ID
+      schema:
+        type: integer
+        example: 321
+
+    IPAddress:
+      name: ip
+      in: path
+      required: true
+      description: IP address
+      schema:
+        type: string
+        format: ipv4
+        example: "123.123.123.123"
+
+    NetIP:
+      name: net-ip
+      in: path
+      required: true
+      description: Network IP address
+      schema:
+        type: string
+        example: "123.123.123.123"
+
+    FailoverIP:
+      name: failover-ip
+      in: path
+      required: true
+      description: Failover IP address
+      schema:
+        type: string
+        example: "123.123.123.123"
+
+    SSHKeyFingerprint:
+      name: fingerprint
+      in: path
+      required: true
+      description: SSH key fingerprint
+      schema:
+        type: string
+        example: "15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb"
+
+    StorageBoxId:
+      name: storagebox-id
+      in: path
+      required: true
+      description: Storage Box ID
+      schema:
+        type: integer
+        example: 123456
+
+    VSwitchId:
+      name: vswitch-id
+      in: path
+      required: true
+      description: vSwitch ID
+      schema:
+        type: integer
+        example: 4321
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              status: 404
+              code: "NOT_FOUND"
+              message: "Resource not found"
+
+    ServerNotFound:
+      description: Server not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              status: 404
+              code: "SERVER_NOT_FOUND"
+              message: "Server not found"
+
+    InvalidInput:
+      description: Invalid input parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorInvalidInput'
+          example:
+            error:
+              status: 400
+              code: "INVALID_INPUT"
+              message: "invalid input"
+              missing: null
+              invalid: ["server_name"]
+
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error:
+              status: 401
+              code: "UNAUTHORIZED"
+              message: "Authentication failed"
+
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorRateLimit'
+          example:
+            error:
+              status: 403
+              code: "RATE_LIMIT_EXCEEDED"
+              message: "rate limit exceeded"
+              max_request: 200
+              interval: 3600
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            status:
+              type: integer
+              description: HTTP status code
+              example: 404
+            code:
+              type: string
+              description: Specific error code
+              example: "SERVER_NOT_FOUND"
+            message:
+              type: string
+              description: Specific error message
+              example: "Server not found"
+          required:
+            - status
+            - code
+            - message
+
+    ServerDetailed:
+      type: object
+      properties:
+        server:
+          allOf:
+            - $ref: '#/components/schemas/ServerBasic/properties/server'
+            - type: object
+              properties:
+                reset:
+                  type: boolean
+                  description: Flag of reset system availability
+                rescue:
+                  type: boolean
+                  description: Flag of Rescue System availability
+                vnc:
+                  type: boolean
+                  description: Flag of VNC installation availability
+                windows:
+                  type: boolean
+                  description: Flag of Windows installation availability
+                plesk:
+                  type: boolean
+                  description: Flag of Plesk installation availability
+                cpanel:
+                  type: boolean
+                  description: Flag of cPanel installation availability
+                wol:
+                  type: boolean
+                  description: Flag of Wake On Lan availability
+                hot_swap:
+                  type: boolean
+                  description: Flag of Hot Swap availability
+                linked_storagebox:
+                  type: integer
+                  nullable: true
+                  description: Linked Storage Box ID
+
+    ServerCancellation:
+      type: object
+      properties:
+        cancellation:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+            server_name:
+              type: string
+              description: Server name
+            earliest_cancellation_date:
+              type: string
+              format: date
+              description: Earliest possible cancellation date
+            cancelled:
+              type: boolean
+              description: Status of server cancellation
+            reservation_possible:
+              type: boolean
+              description: Indicates whether the current server location is eligible for reservation
+            reserved:
+              type: boolean
+              description: Indicates whether the current server location will be reserved
+            cancellation_date:
+              type: string
+              format: date
+              nullable: true
+              description: Cancellation date if cancellation is active
+            cancellation_reason:
+              nullable: true
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                - type: string
+              description: Array of possible cancellation reasons or cancellation reason if active
+
+    IPAddress:
+      type: object
+      properties:
+        ip:
+          type: object
+          properties:
+            ip:
+              type: string
+              format: ipv4
+              description: IP address
+            server_ip:
+              type: string
+              format: ipv4
+              description: Servers main IP address
+            server_number:
+              type: integer
+              description: Server ID
+            locked:
+              type: boolean
+              description: Status of locking
+            separate_mac:
+              type: string
+              nullable: true
+              description: Separate MAC address, if not set null
+            traffic_warnings:
+              type: boolean
+              description: True if traffic warnings are enabled
+            traffic_hourly:
+              type: integer
+              description: Hourly traffic limit in MB
+            traffic_daily:
+              type: integer
+              description: Daily traffic limit in MB
+            traffic_monthly:
+              type: integer
+              description: Monthly traffic limit in GB
+
+    IPAddressDetailed:
+      type: object
+      properties:
+        ip:
+          allOf:
+            - $ref: '#/components/schemas/IPAddress/properties/ip'
+            - type: object
+              properties:
+                gateway:
+                  type: string
+                  format: ipv4
+                  description: Gateway
+                mask:
+                  type: integer
+                  description: Subnet mask in CIDR notation
+                broadcast:
+                  type: string
+                  format: ipv4
+                  description: Broadcast address
+
+    IPCancellation:
+      type: object
+      properties:
+        cancellation:
+          type: object
+          properties:
+            ip:
+              type: string
+              format: ipv4
+              description: IP address
+            server_number:
+              type: integer
+              description: Server ID
+            earliest_cancellation_date:
+              type: string
+              format: date
+              description: Earliest possible cancellation date
+            cancelled:
+              type: boolean
+              description: This shows whether or not the IP has been earmarked for cancellation
+            cancellation_date:
+              type: string
+              format: date
+              nullable: true
+              description: Cancellation date if cancellation is active
+
+    MACAddress:
+      type: object
+      properties:
+        mac:
+          type: object
+          properties:
+            ip:
+              type: string
+              description: IP address
+            mac:
+              type: string
+              nullable: true
+              description: MAC address
+            mask:
+              type: string
+              description: Subnet mask in CIDR notation (for subnets)
+            possible_mac:
+              type: object
+              description: Possible MAC addresses (for subnets)
+
+    Subnet:
+      type: object
+      properties:
+        subnet:
+          type: object
+          properties:
+            ip:
+              type: string
+              description: IP address
+            mask:
+              type: integer
+              description: Subnet mask in CIDR notation
+            gateway:
+              type: string
+              description: Subnet gateway
+            server_ip:
+              type: string
+              format: ipv4
+              description: Servers main IP address
+            server_number:
+              type: integer
+              description: Server ID
+            failover:
+              type: boolean
+              description: True if subnet is a failover subnet
+            locked:
+              type: boolean
+              description: Status of locking
+            traffic_warnings:
+              type: boolean
+              description: True if traffic warnings are enabled
+            traffic_hourly:
+              type: integer
+              description: Hourly traffic limit in MB
+            traffic_daily:
+              type: integer
+              description: Daily traffic limit in MB
+            traffic_monthly:
+              type: integer
+              description: Monthly traffic limit in GB
+
+    ResetOptions:
+      type: object
+      properties:
+        reset:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+            type:
+              type: array
+              items:
+                type: string
+                enum: [sw, hw, man, power, power_long]
+              description: Available reset options
+
+    ResetOptionsDetailed:
+      type: object
+      properties:
+        reset:
+          allOf:
+            - $ref: '#/components/schemas/ResetOptions/properties/reset'
+            - type: object
+              properties:
+                operating_status:
+                  type: string
+                  enum: ["not supported", running, stopped]
+                  description: Current operating status of the server
+
+    ResetResult:
+      type: object
+      properties:
+        reset:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+            type:
+              type: string
+              description: Executed reset option
+
+    FailoverIP:
+      type: object
+      properties:
+        failover:
+          type: object
+          properties:
+            ip:
+              type: string
+              description: Failover net address
+            netmask:
+              type: string
+              description: Failover netmask
+            server_ip:
+              type: string
+              format: ipv4
+              description: Main IP of related server
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Main IPv6 net of related server
+            server_number:
+              type: integer
+              description: Server ID
+            active_server_ip:
+              type: string
+              nullable: true
+              description: Main IP of current destination server
+
+    WakeOnLAN:
+      type: object
+      properties:
+        wol:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+
+    BootConfiguration:
+      type: object
+      properties:
+        boot:
+          type: object
+          properties:
+            rescue:
+              $ref: '#/components/schemas/RescueSystem/properties/rescue'
+            linux:
+              type: object
+              description: Linux installation configuration
+            vnc:
+              type: object
+              description: VNC installation configuration
+            windows:
+              type: object
+              description: Windows installation configuration
+            plesk:
+              type: object
+              description: Plesk installation configuration
+            cpanel:
+              type: object
+              description: cPanel installation configuration
+
+    RescueSystem:
+      type: object
+      properties:
+        rescue:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+            server_number:
+              type: integer
+              description: Server ID
+            os:
+              oneOf:
+                - type: array
+                  items:
+                    type: string
+                    enum: [linux, vkvm]
+                - type: string
+                  enum: [linux, vkvm]
+              description: Array of available operating systems or the active operating system
+            arch:
+              oneOf:
+                - type: array
+                  items:
+                    type: integer
+                    enum: [32, 64]
+                - type: integer
+                  enum: [32, 64]
+              description: Array of available architectures or the active architecture
+              deprecated: true
+            active:
+              type: boolean
+              description: Current Rescue System status
+            password:
+              type: string
+              nullable: true
+              description: Current Rescue System root password or null
+            authorized_key:
+              type: array
+              items:
+                type: string
+              description: Authorized public SSH keys
+            host_key:
+              type: array
+              items:
+                type: string
+              description: Host keys
+    ServerBasic:
+      type: object
+      properties:
+        server:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+              example: "123.123.123.123"
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+              example: "2a01:f48:111:4221::"
+            server_number:
+              type: integer
+              description: Server ID
+              example: 321
+            server_name:
+              type: string
+              description: Server name
+              example: "server1"
+            product:
+              type: string
+              description: Server product name
+              example: "DS 3000"
+            dc:
+              type: string
+              description: Data center
+              example: "NBG1-DC1"
+            traffic:
+              type: string
+              description: Free traffic quota, 'unlimited' in case of unlimited traffic
+              example: "5 TB"
+            status:
+              type: string
+              enum: [ ready, "in process" ]
+              description: Server status
+              example: "ready"
+            cancelled:
+              type: boolean
+              description: Status of server cancellation
+              example: false
+            paid_until:
+              type: string
+              format: date
+              description: Paid until date
+              example: "2010-09-02"
+            ip:
+              type: array
+              items:
+                type: string
+                format: ipv4
+              description: Array of assigned single IP addresses
+              example: [ "123.123.123.123" ]
+            subnet:
+              type: array
+              items:
+                type: object
+                properties:
+                  ip:
+                    type: string
+                    description: IP address
+                    example: "2a01:4f8:111:4221::"
+                  mask:
+                    type: string
+                    description: Subnet mask
+                    example: "64"
+              nullable: true
+              description: Array of assigned subnets
+              example:
+                - ip: "2a01:4f8:111:4221::"
+                  mask: "64"
+          required:
+            - server_ip
+            - server_number
+            - server_name
+            - product
+            - dc
+            - traffic
+            - status
+            - cancelled
+            - paid_until
+            - ip
+
+    ErrorInvalidInput:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            status:
+              type: integer
+              description: HTTP Status Code
+              example: 400
+            code:
+              type: string
+              description: Specific error code
+              example: "INVALID_INPUT"
+            message:
+              type: string
+              description: Specific error message
+              example: "invalid input"
+            missing:
+              type: array
+              items:
+                type: string
+              nullable: true
+              description: Array of missing input parameters or null
+              example: [ "server_name" ]
+            invalid:
+              type: array
+              items:
+                type: string
+              nullable: true
+              description: Array of invalid input parameters or null
+              example: null
+          required:
+            - status
+            - code
+            - message
+            - missing
+            - invalid
+
+    ErrorRateLimit:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            status:
+              type: integer
+              description: HTTP Status Code
+              example: 403
+            code:
+              type: string
+              description: Specific error code
+              example: "RATE_LIMIT_EXCEEDED"
+            message:
+              type: string
+              description: Specific error message
+              example: "rate limit exceeded"
+            max_request:
+              type: integer
+              description: Maximum allowed requests
+              example: 200
+            interval:
+              type: integer
+              description: Time interval in seconds
+              example: 3600
+          required:
+            - status
+            - code
+            - message
+            - max_request
+            - interval
+
+    RescueSystemActivated:
+      type: object
+      properties:
+        rescue:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+              example: "123.123.123.123"
+            server_ipv6_net:
+              type: string
+              format: ipv6
+              description: Server main IPv6 net address
+              example: "2a01:4f8:111:4221::"
+            server_number:
+              type: integer
+              description: Server ID
+              example: 321
+            os:
+              type: string
+              enum: [ linux, vkvm ]
+              description: Operating system
+              example: "linux"
+            arch:
+              type: integer
+              enum: [ 32, 64 ]
+              description: Architecture
+              example: 64
+              deprecated: true
+            active:
+              type: boolean
+              description: Rescue system status (always true when activated)
+              example: true
+            password:
+              type: string
+              description: Rescue System root password
+              example: "jEt0dtUvomlyOwRr"
+            authorized_key:
+              type: array
+              items:
+                type: string
+              description: Authorized public SSH keys
+              example: [ ]
+            host_key:
+              type: array
+              items:
+                type: string
+              description: Host keys
+              example: [ ]
+          required:
+            - server_ip
+            - server_ipv6_net
+            - server_number
+            - os
+            - active
+            - password
+            - authorized_key
+            - host_key
+
+    ReverseDNS:
+      type: object
+      properties:
+        rdns:
+          type: object
+          properties:
+            ip:
+              type: string
+              description: IP address
+            ptr:
+              type: string
+              description: PTR record
+
+    SSHKey:
+      type: object
+      properties:
+        key:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Key name
+            fingerprint:
+              type: string
+              description: Key fingerprint
+            type:
+              type: string
+              enum: [RSA, ECDSA, ED25519]
+              description: Key algorithm type
+            size:
+              type: integer
+              description: Key size in bits
+            data:
+              type: string
+              description: Key data in OpenSSH format
+            created_at:
+              type: string
+              format: date-time
+              description: Key creation date
+
+    StorageBoxBasic:
+      type: object
+      properties:
+        storagebox:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: Storage Box ID
+            login:
+              type: string
+              description: User name
+            name:
+              type: string
+              description: Name of the Storage Box
+            product:
+              type: string
+              description: Product name
+            cancelled:
+              type: boolean
+              description: Status of Storage Box cancellation
+            locked:
+              type: boolean
+              description: Status of locking
+            location:
+              type: string
+              description: Location of Storage Box host
+            linked_server:
+              type: integer
+              nullable: true
+              description: Linked server id
+            paid_until:
+              type: string
+              format: date
+              description: Paid until date
+
+    StorageBoxDetailed:
+      type: object
+      properties:
+        storagebox:
+          allOf:
+            - $ref: '#/components/schemas/StorageBoxBasic/properties/storagebox'
+            - type: object
+              properties:
+                disk_quota:
+                  type: integer
+                  description: Total space in MB
+                disk_usage:
+                  type: integer
+                  description: Used space in MB
+                disk_usage_data:
+                  type: integer
+                  description: Used space by data in MB
+                disk_usage_snapshots:
+                  type: integer
+                  description: Used space by snapshots in MB
+                webdav:
+                  type: boolean
+                  description: Status of WebDAV
+                samba:
+                  type: boolean
+                  description: Status of Samba
+                ssh:
+                  type: boolean
+                  description: Status of SSH-Support
+                external_reachability:
+                  type: boolean
+                  description: Status of external reachability
+                zfs:
+                  type: boolean
+                  description: Status of ZFS directory
+                server:
+                  type: string
+                  description: Server
+                host_system:
+                  type: string
+                  description: Identifier of Storage Box host
+
+    FirewallRule:
+      type: object
+      properties:
+        ip_version:
+          type: string
+          enum: [ipv4, ipv6]
+          description: Internet protocol version
+        name:
+          type: string
+          description: Rule name
+        dst_ip:
+          type: string
+          nullable: true
+          description: Destination IP address or subnet address (CIDR notation)
+        src_ip:
+          type: string
+          nullable: true
+          description: Source IP address or subnet address (CIDR notation)
+        dst_port:
+          type: string
+          nullable: true
+          description: Destination port or port range
+        src_port:
+          type: string
+          nullable: true
+          description: Source port or port range
+        protocol:
+          type: string
+          enum: [tcp, udp, gre, icmp, ipip, ah, esp]
+          nullable: true
+          description: Protocol above IP layer
+        tcp_flags:
+          type: string
+          nullable: true
+          description: TCP flag or logical combination of flags
+        action:
+          type: string
+          enum: [accept, discard]
+          description: Action if rule matches
+      required:
+        - action
+
+    FirewallConfiguration:
+      type: object
+      properties:
+        firewall:
+          type: object
+          properties:
+            server_ip:
+              type: string
+              format: ipv4
+              description: Server main IP address
+            server_number:
+              type: integer
+              description: Server ID
+            status:
+              type: string
+              enum: [active, disabled, "in process"]
+              description: Status of firewall
+            filter_ipv6:
+              type: boolean
+              description: Flag indicating if IPv6 filter is active
+            whitelist_hos:
+              type: boolean
+              description: Flag of Hetzner services whitelisting
+            port:
+              type: string
+              enum: [main, kvm]
+              description: Switch port of firewall
+            rules:
+              type: object
+              properties:
+                input:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/FirewallRule'
+                  description: Input rules
+                output:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/FirewallRule'
+                  description: Output rules
+
+    FirewallTemplate:
+      type: object
+      properties:
+        firewall_template:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: ID of firewall template
+            name:
+              type: string
+              description: Name of firewall template
+            filter_ipv6:
+              type: boolean
+              description: Flag indicating if IPv6 filter is active
+            whitelist_hos:
+              type: boolean
+              description: Flag of Hetzner services whitelisting
+            is_default:
+              type: boolean
+              description: If true the template is selected by default in the Robot webpanel
+
+    FirewallTemplateDetailed:
+      type: object
+      properties:
+        firewall_template:
+          allOf:
+            - $ref: '#/components/schemas/FirewallTemplate/properties/firewall_template'
+            - type: object
+              properties:
+                rules:
+                  type: object
+                  properties:
+                    input:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FirewallRule'
+                    output:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FirewallRule'
+
+    VSwitchBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: vSwitch ID
+          example: 1234
+        name:
+          type: string
+          description: vSwitch name
+          example: "vswitch 1234"
+        vlan:
+          type: integer
+          minimum: 4000
+          maximum: 4091
+          description: VLAN ID
+          example: 4000
+        cancelled:
+          type: boolean
+          description: Cancellation status
+          example: false
+      required:
+        - id
+        - name
+        - vlan
+        - cancelled
+
+    VSwitchServer:
+      type: object
+      properties:
+        server_ip:
+          type: string
+          format: ipv4
+          description: Server main IP address
+          example: "123.123.123.123"
+        server_ipv6_net:
+          type: string
+          format: ipv6
+          description: Server main IPv6 net address
+          example: "2a01:4f8:111:4221::"
+        server_number:
+          type: integer
+          description: Server ID
+          example: 321
+        status:
+          type: string
+          enum: [ready, "in process", failed]
+          description: Status of vSwitch for this server
+          example: "ready"
+      required:
+        - server_ip
+        - server_ipv6_net
+        - server_number
+        - status
+
+    VSwitchSubnet:
+      type: object
+      properties:
+        ip:
+          type: string
+          description: IP address
+          example: "213.239.252.48"
+        mask:
+          type: integer
+          description: Subnet mask in CIDR notation
+          example: 29
+        gateway:
+          type: string
+          description: Gateway
+          example: "213.239.252.49"
+      required:
+        - ip
+        - mask
+        - gateway
+
+    VSwitchCloudNetwork:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Cloud network ID
+          example: 123
+        ip:
+          type: string
+          description: IP address
+          example: "10.0.2.0"
+        mask:
+          type: integer
+          description: Subnet mask in CIDR notation
+          example: 24
+        gateway:
+          type: string
+          description: Gateway
+          example: "10.0.2.1"
+      required:
+        - id
+        - ip
+        - mask
+        - gateway
+
+    VSwitchDetailed:
+      allOf:
+        - $ref: '#/components/schemas/VSwitchBasic'
+        - type: object
+          properties:
+            server:
+              type: array
+              items:
+                $ref: '#/components/schemas/VSwitchServer'
+              description: Array of servers attached to this vSwitch
+              example:
+                - server_ip: "123.123.123.123"
+                  server_ipv6_net: "2a01:4f8:111:4221::"
+                  server_number: 321
+                  status: "ready"
+                - server_ip: "123.123.123.124"
+                  server_ipv6_net: "2a01:4f8:111:4221::"
+                  server_number: 421
+                  status: "ready"
+            subnet:
+              type: array
+              items:
+                $ref: '#/components/schemas/VSwitchSubnet'
+              description: Array of subnets attached to this vSwitch
+              example:
+                - ip: "213.239.252.48"
+                  mask: 29
+                  gateway: "213.239.252.49"
+            cloud_network:
+              type: array
+              items:
+                $ref: '#/components/schemas/VSwitchCloudNetwork'
+              description: Array of cloud networks attached to this vSwitch
+              example:
+                - id: 123
+                  ip: "10.0.2.0"
+                  mask: 24
+                  gateway: "10.0.2.1"
+          required:
+            - server
+            - subnet
+            - cloud_network
+
+  examples:
+    ServerExample:
+      summary: Example server response
+      value:
+        server:
+          server_ip: "123.123.123.123"
+          server_ipv6_net: "2a01:4f8:111:4221::"
+          server_number: 321
+          server_name: "server1"
+          product: "DS 3000"
+          dc: "NBG1-DC1"
+          traffic: "5 TB"
+          status: "ready"
+          cancelled: false
+          paid_until: "2010-09-02"
+          ip: ["123.123.123.123"]
+          subnet:
+            - ip: "2a01:4f8:111:4221::"
+              mask: "64"
+
+    VSwitchExample:
+      summary: Example vSwitch response
+      value:
+        id: 4321
+        name: "my vSwitch"
+        vlan: 4000
+        cancelled: false
+        server:
+          - server_ip: "123.123.123.123"
+            server_ipv6_net: "2a01:4f8:111:4221::"
+            server_number: 321
+            status: "ready"
+        subnet:
+          - ip: "213.239.252.48"
+            mask: 29
+            gateway: "213.239.252.49"
+        cloud_network:
+          - id: 123
+            ip: "10.0.2.0"
+            mask: 24
+            gateway: "10.0.2.1"
+
+    FirewallConfigurationExample:
+      summary: Example firewall configuration
+      value:
+        firewall:
+          server_ip: "123.123.123.123"
+          server_number: 321
+          status: "active"
+          filter_ipv6: false
+          whitelist_hos: true
+          port: "main"
+          rules:
+            input:
+              - ip_version: "ipv4"
+                name: "rule 1"
+                dst_ip: null
+                src_ip: "1.1.1.1"
+                dst_port: "80"
+                src_port: null
+                protocol: null
+                tcp_flags: null
+                action: "accept"
+            output:
+              - ip_version: null
+                name: "Allow all"
+                dst_ip: null
+                src_ip: null
+                dst_port: null
+                src_port: null
+                protocol: null
+                tcp_flags: null
+                action: "accept"
+
+    SSHKeyExample:
+      summary: Example SSH key response
+      value:
+        key:
+          name: "key1"
+          fingerprint: "56:29:99:a4:5d:ed:ac:95:c1:f5:88:82:90:5d:dd:10"
+          type: "ECDSA"
+          size: 521
+          data: "ecdsa-sha2-nistp521 AAAAE2VjZHNh ..."
+          created_at: "2021-12-31T23:59:59"
+
+    StorageBoxExample:
+      summary: Example Storage Box response
+      value:
+        storagebox:
+          id: 123456
+          login: "u12345"
+          name: "Backup Server 1"
+          product: "BX60"
+          cancelled: false
+          locked: false
+          location: "FSN1"
+          linked_server: 123456
+          paid_until: "2015-10-23"
+          disk_quota: 10240000
+          disk_usage: 900
+          disk_usage_data: 500
+          disk_usage_snapshots: 400
+          webdav: true
+          samba: true
+          ssh: true
+          external_reachability: true
+          zfs: false
+          server: "u12345.your-storagebox.de"
+          host_system: "FSN1-BX355"
+
+    FailoverIPExample:
+      summary: Example failover IP response
+      value:
+        failover:
+          ip: "123.123.123.123"
+          netmask: "255.255.255.255"
+          server_ip: "78.46.1.93"
+          server_ipv6_net: "2a01:4f8:d0a:2003::"
+          server_number: 321
+          active_server_ip: "78.46.1.93"
+
+    ReverseDNSExample:
+      summary: Example reverse DNS response
+      value:
+        rdns:
+          ip: "123.123.123.123"
+          ptr: "testen.de"
+
+    ErrorExample:
+      summary: Example error response
+      value:
+        error:
+          status: 404
+          code: "SERVER_NOT_FOUND"
+          message: "Server with id 321 not found"
+
+    RateLimitErrorExample:
+      summary: Example rate limit error
+      value:
+        error:
+          status: 403
+          code: "RATE_LIMIT_EXCEEDED"
+          message: "rate limit exceeded"
+          max_request: 200
+          interval: 3600
+
+    InvalidInputExample:
+      summary: Example invalid input error
+      value:
+        error:
+          status: 400
+          code: "INVALID_INPUT"
+          message: "invalid input"
+          missing: ["server_name"]
+          invalid: null
