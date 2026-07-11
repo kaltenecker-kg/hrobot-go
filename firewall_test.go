@@ -3,6 +3,7 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -73,38 +74,106 @@ func TestFirewallService_Get(t *testing.T) {
 	}
 }
 
+// firewallDocRules returns two doc-shaped firewall input rules used to
+// verify that Activate/Disable/Update re-post the full existing ruleset.
+func firewallDocRules() []map[string]any {
+	return []map[string]any{
+		{
+			"name":       "allow ssh",
+			"ip_version": "ipv4",
+			"action":     "accept",
+			"protocol":   "tcp",
+			"dst_port":   "22",
+		},
+		{
+			"name":       "allow http",
+			"ip_version": "ipv4",
+			"action":     "accept",
+			"protocol":   "tcp",
+			"dst_port":   "80",
+		},
+	}
+}
+
+// assertInputRuleForm asserts that the posted form contains the
+// rules[input][idx][*] keys/values matching the given doc-shaped rule.
+func assertInputRuleForm(t *testing.T, r *http.Request, idx int, rule map[string]any) {
+	t.Helper()
+	for key, value := range rule {
+		formKey := fmt.Sprintf("rules[input][%d][%s]", idx, key)
+		got := r.FormValue(formKey)
+		want := fmt.Sprintf("%v", value)
+		if got != want {
+			t.Errorf("expected form key %q to be %q, got %q", formKey, want, got)
+		}
+	}
+}
+
 func TestFirewallService_Activate(t *testing.T) {
+	getCalled := false
+	postCalled := false
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
-		if r.Method != "POST" {
-			t.Errorf("expected POST request, got '%s'", r.Method)
-		}
 
-		if err := r.ParseForm(); err != nil {
-			t.Fatalf("failed to parse form: %v", err)
-		}
-
-		if r.FormValue("status") != "active" {
-			t.Errorf("expected status 'active', got '%s'", r.FormValue("status"))
-		}
-
-		response := map[string]any{
-			"firewall": map[string]any{
-				"server_ip":     "123.123.123.123",
-				"server_number": 321,
-				"status":        "active",
-				"whitelist_hos": false,
-				"port":          "main",
-				"rules": map[string]any{
-					"input":  []map[string]any{},
-					"output": []map[string]any{},
+		switch r.Method {
+		case http.MethodGet:
+			getCalled = true
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "disabled",
+					"whitelist_hos": true,
+					"filter_ipv6":   false,
+					"port":          "main",
+					"rules": map[string]any{
+						"input":  firewallDocRules(),
+						"output": []map[string]any{},
+					},
 				},
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		case http.MethodPost:
+			postCalled = true
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("failed to parse form: %v", err)
+			}
+
+			if r.FormValue("status") != "active" {
+				t.Errorf("expected status 'active', got '%s'", r.FormValue("status"))
+			}
+			if r.FormValue("whitelist_hos") != "true" {
+				t.Errorf("expected whitelist_hos 'true', got '%s'", r.FormValue("whitelist_hos"))
+			}
+
+			docRules := firewallDocRules()
+			for i, rule := range docRules {
+				assertInputRuleForm(t, r, i, rule)
+			}
+
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "active",
+					"whitelist_hos": true,
+					"port":          "main",
+					"rules": map[string]any{
+						"input":  firewallDocRules(),
+						"output": []map[string]any{},
+					},
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		default:
+			t.Errorf("expected GET or POST request, got '%s'", r.Method)
 		}
 	}))
 	defer server.Close()
@@ -117,43 +186,87 @@ func TestFirewallService_Activate(t *testing.T) {
 		t.Fatalf("Firewall.Activate returned error: %v", err)
 	}
 
+	if !getCalled {
+		t.Error("expected Activate to call GET to fetch the current configuration")
+	}
+	if !postCalled {
+		t.Error("expected Activate to call POST to apply the updated configuration")
+	}
+
 	if config.Status != FirewallStatusActive {
 		t.Errorf("expected status 'active', got '%s'", config.Status)
+	}
+
+	if len(config.Rules.Input) != 2 {
+		t.Errorf("expected 2 input rules, got %d", len(config.Rules.Input))
 	}
 }
 
 func TestFirewallService_Disable(t *testing.T) {
+	getCalled := false
+	postCalled := false
+
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/firewall/321" {
 			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
 		}
-		if r.Method != "POST" {
-			t.Errorf("expected POST request, got '%s'", r.Method)
-		}
 
-		if err := r.ParseForm(); err != nil {
-			t.Fatalf("failed to parse form: %v", err)
-		}
-
-		if r.FormValue("status") != "disabled" {
-			t.Errorf("expected status 'disabled', got '%s'", r.FormValue("status"))
-		}
-
-		response := map[string]any{
-			"firewall": map[string]any{
-				"server_ip":     "123.123.123.123",
-				"server_number": 321,
-				"status":        "disabled",
-				"whitelist_hos": false,
-				"port":          "main",
-				"rules": map[string]any{
-					"input":  []map[string]any{},
-					"output": []map[string]any{},
+		switch r.Method {
+		case http.MethodGet:
+			getCalled = true
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "active",
+					"whitelist_hos": true,
+					"filter_ipv6":   false,
+					"port":          "main",
+					"rules": map[string]any{
+						"input":  firewallDocRules(),
+						"output": []map[string]any{},
+					},
 				},
-			},
-		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		case http.MethodPost:
+			postCalled = true
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("failed to parse form: %v", err)
+			}
+
+			if r.FormValue("status") != "disabled" {
+				t.Errorf("expected status 'disabled', got '%s'", r.FormValue("status"))
+			}
+			if r.FormValue("whitelist_hos") != "true" {
+				t.Errorf("expected whitelist_hos 'true', got '%s'", r.FormValue("whitelist_hos"))
+			}
+
+			docRules := firewallDocRules()
+			for i, rule := range docRules {
+				assertInputRuleForm(t, r, i, rule)
+			}
+
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "disabled",
+					"whitelist_hos": true,
+					"port":          "main",
+					"rules": map[string]any{
+						"input":  firewallDocRules(),
+						"output": []map[string]any{},
+					},
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		default:
+			t.Errorf("expected GET or POST request, got '%s'", r.Method)
 		}
 	}))
 	defer server.Close()
@@ -166,8 +279,19 @@ func TestFirewallService_Disable(t *testing.T) {
 		t.Fatalf("Firewall.Disable returned error: %v", err)
 	}
 
+	if !getCalled {
+		t.Error("expected Disable to call GET to fetch the current configuration")
+	}
+	if !postCalled {
+		t.Error("expected Disable to call POST to apply the updated configuration")
+	}
+
 	if config.Status != FirewallStatusDisabled {
 		t.Errorf("expected status 'disabled', got '%s'", config.Status)
+	}
+
+	if len(config.Rules.Input) != 2 {
+		t.Errorf("expected 2 input rules, got %d", len(config.Rules.Input))
 	}
 }
 
@@ -204,6 +328,36 @@ func TestFirewallService_Update(t *testing.T) {
 
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		if r.FormValue("status") != "active" {
+			t.Errorf("expected status 'active', got '%s'", r.FormValue("status"))
+		}
+		if r.FormValue("whitelist_hos") != "true" {
+			t.Errorf("expected whitelist_hos 'true', got '%s'", r.FormValue("whitelist_hos"))
+		}
+
+		wantRule := map[string]any{
+			"name":       "allow http",
+			"ip_version": "ipv4",
+			"action":     "accept",
+			"protocol":   "tcp",
+			"dst_port":   "80",
+		}
+		assertInputRuleForm(t, r, 0, wantRule)
+
+		// Confirm the literal-bracket keys are present in the parsed form
+		// (not percent-encoded, as the Robot API requires).
+		for _, key := range []string{
+			"rules[input][0][name]",
+			"rules[input][0][ip_version]",
+			"rules[input][0][action]",
+			"rules[input][0][protocol]",
+			"rules[input][0][dst_port]",
+		} {
+			if _, ok := r.Form[key]; !ok {
+				t.Errorf("expected literal-bracket form key %q to be present", key)
+			}
 		}
 
 		response := map[string]any{
