@@ -364,7 +364,7 @@ func TestStorageBoxService_GetSnapshotPlan(t *testing.T) {
 	}
 }
 
-func TestStorageBoxService_SetSnapshotPlan_ArrayResponse(t *testing.T) {
+func TestStorageBoxService_SetSnapshotPlan(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
@@ -417,25 +417,6 @@ func TestStorageBoxService_SetSnapshotPlan_ArrayResponse(t *testing.T) {
 	}
 	if plan.Status != "enabled" || plan.MaxSnapshots != 2 {
 		t.Errorf("unexpected: %+v", plan)
-	}
-}
-
-func TestStorageBoxService_SetSnapshotPlan_ObjectResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(snapshotPlanFixture())
-	}))
-	defer server.Close()
-
-	client := NewClient("u", "p", WithBaseURL(server.URL))
-	plan, err := client.StorageBox.SetSnapshotPlan(context.Background(), 123456, StorageBoxSnapshotPlan{
-		Status:       "disabled",
-		MaxSnapshots: 0,
-	})
-	if err != nil {
-		t.Fatalf("SetSnapshotPlan: %v", err)
-	}
-	if plan.Status != "enabled" {
-		t.Errorf("status: %q", plan.Status)
 	}
 }
 

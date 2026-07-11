@@ -2,7 +2,6 @@ package hrobot
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -272,6 +271,19 @@ func (s *StorageBoxService) SetSnapshotComment(ctx context.Context, storageBoxID
 	return s.client.Post(ctx, path, data, nil)
 }
 
+// decodeSnapshotPlanResponse decodes the shared response shape documented
+// for both GET and POST /storagebox/{storagebox-id}/snapshotplan: a
+// single-element array of the wrapped plan object.
+func decodeSnapshotPlanResponse(plans []StorageBoxSnapshotPlan, err error) (*StorageBoxSnapshotPlan, error) {
+	if err != nil {
+		return nil, err
+	}
+	if len(plans) == 0 {
+		return nil, NewAPIError(ErrUnknown, "empty snapshotplan response")
+	}
+	return &plans[0], nil
+}
+
 // GetSnapshotPlan retrieves the snapshot plan configuration. The endpoint
 // returns a single-element array; this method unwraps it.
 //
@@ -281,13 +293,8 @@ func (s *StorageBoxService) SetSnapshotComment(ctx context.Context, storageBoxID
 func (s *StorageBoxService) GetSnapshotPlan(ctx context.Context, storageBoxID int) (*StorageBoxSnapshotPlan, error) {
 	path := fmt.Sprintf("/storagebox/%d/snapshotplan", storageBoxID)
 	var plans []StorageBoxSnapshotPlan
-	if err := s.client.Get(ctx, path, &plans); err != nil {
-		return nil, err
-	}
-	if len(plans) == 0 {
-		return nil, NewAPIError(ErrUnknown, "empty snapshotplan response")
-	}
-	return &plans[0], nil
+	err := s.client.Get(ctx, path, &plans)
+	return decodeSnapshotPlanResponse(plans, err)
 }
 
 // SetSnapshotPlan configures the snapshot plan. Status is required; the
@@ -318,34 +325,9 @@ func (s *StorageBoxService) SetSnapshotPlan(ctx context.Context, storageBoxID in
 	}
 	data.Set("max_snapshots", strconv.Itoa(plan.MaxSnapshots))
 
-	// The Robot endpoint inconsistently returns either a single-element
-	// array `[{"snapshotplan":{...}}]` or the bare wrapped object
-	// `{"snapshotplan":{...}}`. The auto-unwrap strips the wrapper in both
-	// shapes, leaving us with either an array or a single object; decode
-	// into an any first and inspect.
-	var raw any
-	if err := s.client.Post(ctx, path, data, &raw); err != nil {
-		return nil, err
-	}
-	encoded, err := json.Marshal(raw)
-	if err != nil {
-		return nil, NewParseError("failed to re-encode snapshotplan response", err)
-	}
-	if len(encoded) > 0 && encoded[0] == '[' {
-		var plans []StorageBoxSnapshotPlan
-		if err := json.Unmarshal(encoded, &plans); err != nil {
-			return nil, NewParseError("failed to unmarshal snapshotplan", err)
-		}
-		if len(plans) == 0 {
-			return nil, NewAPIError(ErrUnknown, "empty snapshotplan response")
-		}
-		return &plans[0], nil
-	}
-	var p StorageBoxSnapshotPlan
-	if err := json.Unmarshal(encoded, &p); err != nil {
-		return nil, NewParseError("failed to unmarshal snapshotplan", err)
-	}
-	return &p, nil
+	var plans []StorageBoxSnapshotPlan
+	err := s.client.Post(ctx, path, data, &plans)
+	return decodeSnapshotPlanResponse(plans, err)
 }
 
 // ListSubAccounts returns all sub-accounts for a storage box.
