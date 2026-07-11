@@ -48,12 +48,16 @@ type TrafficStats struct {
 }
 
 // TrafficGetParams represents parameters for retrieving traffic data.
+// The From and To date formats depend on Type:
+//   - day: YYYY-MM-DDTHH (e.g., "2025-01-15T14")
+//   - month: YYYY-MM-DD (e.g., "2025-01-15")
+//   - year: YYYY-MM (e.g., "2025-01")
 type TrafficGetParams struct {
 	Type         TrafficType // Type of data (day, month, year)
-	From         string      // Start date (YYYY-MM-DD)
-	To           string      // End date (YYYY-MM-DD)
-	IP           string      // Server IP address
-	SingleValues bool        // Return single values per day
+	From         string      // Start date (format depends on Type; see comments)
+	To           string      // End date (format depends on Type; see comments)
+	IP           string      // Server IP address (optional; omit for all IPs)
+	SingleValues bool        // Return single values per day/month/year
 }
 
 // Get retrieves traffic statistics for a server.
