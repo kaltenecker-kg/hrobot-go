@@ -244,6 +244,27 @@ func (bt BerlinTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bt.In(berlinLocation).Format("2006-01-02 15:04:05"))
 }
 
+// FlexibleID decodes a JSON string or number into a string.
+type FlexibleID string
+
+// UnmarshalJSON handles both JSON string and JSON number encodings of an ID.
+func (f *FlexibleID) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*f = FlexibleID(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(data, &n); err != nil {
+		return err
+	}
+	*f = FlexibleID(n.String())
+	return nil
+}
+
 // StringFloat represents a float that is encoded as a string in JSON.
 type StringFloat float64
 
