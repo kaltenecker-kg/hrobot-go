@@ -547,28 +547,3 @@ func (c *Client) GetWrappedList(ctx context.Context, path string, _ string, v an
 	return c.Get(ctx, path, v)
 }
 
-// PostJSON performs a POST request with JSON body.
-func (c *Client) PostJSON(ctx context.Context, path string, body any, v any) error {
-	jsonData, err := json.Marshal(body)
-	if err != nil {
-		return NewParseError("failed to marshal request body", err)
-	}
-
-	reqURL := c.baseURL + path
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(jsonData))
-	if err != nil {
-		return NewNetworkError("failed to create request", err)
-	}
-
-	req.SetBasicAuth(c.username, c.password)
-	req.Header.Set("User-Agent", c.userAgent)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return NewNetworkError("request failed", err)
-	}
-
-	c.updateRateLimit(resp.Header)
-	return c.handleResponse(ctx, resp, v)
-}
