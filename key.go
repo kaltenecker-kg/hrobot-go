@@ -26,15 +26,6 @@ type SSHKey struct {
 	CreatedAt   BerlinTime `json:"created_at"`
 }
 
-// SSHKeyReference represents SSH key metadata without the key data itself.
-type SSHKeyReference struct {
-	Name        string     `json:"name"`
-	Fingerprint string     `json:"fingerprint"`
-	Type        string     `json:"type"`
-	Size        int        `json:"size"`
-	CreatedAt   BerlinTime `json:"created_at"`
-}
-
 // List retrieves all SSH keys.
 //
 // GET /key

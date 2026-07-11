@@ -26,16 +26,6 @@ type Failover struct {
 	ActiveServerIP *string `json:"active_server_ip"` // nil when unrouted
 }
 
-// FailoverListItem represents a failover entry in list responses.
-type FailoverListItem struct {
-	Failover Failover `json:"failover"`
-}
-
-// FailoverResponse wraps a single failover response.
-type FailoverResponse struct {
-	Failover Failover `json:"failover"`
-}
-
 // List retrieves all failover IPs for servers.
 //
 // GET /failover
