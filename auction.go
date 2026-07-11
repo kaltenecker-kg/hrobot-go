@@ -25,12 +25,14 @@ type AuctionServer struct {
 	Distributions   []string       `json:"dist"`
 	Languages       []string       `json:"lang"`
 	Datacenter      *string        `json:"datacenter"`
+	Arch            string         `json:"arch"` // Deprecated: use the CPU field instead.
 	CPU             string         `json:"cpu"`
 	CPUBenchmark    uint32         `json:"cpu_benchmark"`
-	MemorySize      float64        `json:"memory_size"`      // in GB
-	HDDSize         float64        `json:"hdd_size"`         // in GB
-	HDDText         string         `json:"hdd_text"`         // human-readable HDD description
-	HDDCount        uint8          `json:"hdd_count"`        // number of primary HDDs
+	MemorySize      float64        `json:"memory_size"` // in GB
+	HDDSize         float64        `json:"hdd_size"`    // in GB
+	HDDText         string         `json:"hdd_text"`    // human-readable HDD description
+	HDDCount        uint8          `json:"hdd_count"`   // number of primary HDDs
+	NetworkSpeed    string         `json:"network_speed"`
 	Price           StringFloat    `json:"price"`            // monthly price net
 	PriceVAT        StringFloat    `json:"price_vat"`        // monthly price gross
 	PriceSetup      StringFloat    `json:"price_setup"`      // setup price net
