@@ -243,6 +243,24 @@ func TestParsePortRange(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
+		{
+			name:    "inverted range",
+			input:   "443-80",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "out of range port",
+			input:   "65536",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "out of range in range",
+			input:   "65535-65536",
+			want:    nil,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

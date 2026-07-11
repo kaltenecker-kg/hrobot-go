@@ -372,6 +372,9 @@ func ParsePortRange(s string) ([]PortRange, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid port end: %s", parts[1])
 		}
+		if start > end {
+			return nil, fmt.Errorf("inverted port range: %s-%s (start > end)", parts[0], parts[1])
+		}
 		return []PortRange{{Start: uint16(start), End: uint16(end)}}, nil
 	}
 
