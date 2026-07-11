@@ -546,4 +546,3 @@ func (c *Client) DeleteWithBody(ctx context.Context, path string, data url.Value
 func (c *Client) GetWrappedList(ctx context.Context, path string, _ string, v any) error {
 	return c.Get(ctx, path, v)
 }
-
