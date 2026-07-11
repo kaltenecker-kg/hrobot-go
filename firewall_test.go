@@ -390,9 +390,11 @@ func TestFirewallService_Update(t *testing.T) {
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	ctx := context.Background()
 
+	status := FirewallStatusActive
+	whitelist := true
 	updateConfig := UpdateConfig{
-		Status:       FirewallStatusActive,
-		WhitelistHOS: true,
+		Status:       &status,
+		WhitelistHOS: &whitelist,
 		Rules: FirewallRules{
 			Input: []FirewallRule{
 				{
