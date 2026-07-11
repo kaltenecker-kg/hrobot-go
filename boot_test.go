@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestBootService_Get(t *testing.T) {
@@ -134,29 +136,42 @@ func TestBootService_Get(t *testing.T) {
 	}
 }
 
+// TestBootService_ActivateRescue is not wrapped with spectest.Handler:
+// spec/robot.yaml declares authorized_key/host_key as arrays of bare
+// fingerprint strings, but the actual API (and this fixture, matching the
+// wrapped {"key": {...}} shape used consistently elsewhere in this file)
+// returns an array of objects. That spec/API mismatch is pre-existing and
+// out of scope here.
 func TestBootService_ActivateRescue(t *testing.T) {
 	tests := []struct {
 		name         string
-		os           string
-		arch         int
+		opts         RescueActivateOpts
 		fingerprints []string
 	}{
 		{
-			name:         "linux rescue with keys",
-			os:           "linux",
-			arch:         64,
+			name: "linux rescue with keys",
+			opts: RescueActivateOpts{
+				OS:             "linux",
+				Arch:           64,
+				AuthorizedKeys: []string{"15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb"},
+			},
 			fingerprints: []string{"15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb"},
 		},
 		{
-			name:         "linux rescue without keys",
-			os:           "linux",
-			arch:         64,
+			name: "linux rescue without keys",
+			opts: RescueActivateOpts{
+				OS:   "linux",
+				Arch: 64,
+			},
 			fingerprints: []string{},
 		},
 		{
-			name:         "vkvm rescue",
-			os:           "vkvm",
-			arch:         64,
+			name: "vkvm rescue",
+			opts: RescueActivateOpts{
+				OS:             "vkvm",
+				Arch:           64,
+				AuthorizedKeys: []string{"c1:e4:47:2d:f5:0a:1b:22:33:44:55:66:77:88:99:00"},
+			},
 			fingerprints: []string{"c1:e4:47:2d:f5:0a:1b:22:33:44:55:66:77:88:99:00"},
 		},
 	}
@@ -175,8 +190,8 @@ func TestBootService_ActivateRescue(t *testing.T) {
 					t.Fatalf("failed to parse form: %v", err)
 				}
 
-				if r.FormValue("os") != tt.os {
-					t.Errorf("expected os '%s', got '%s'", tt.os, r.FormValue("os"))
+				if r.FormValue("os") != tt.opts.OS {
+					t.Errorf("expected os '%s', got '%s'", tt.opts.OS, r.FormValue("os"))
 				}
 
 				if r.FormValue("arch") != "64" {
@@ -210,8 +225,8 @@ func TestBootService_ActivateRescue(t *testing.T) {
 						"server_ipv6_net": "2a01:4f8:111:4221::",
 						"server_number":   321,
 						"active":          true,
-						"os":              tt.os,
-						"arch":            tt.arch,
+						"os":              tt.opts.OS,
+						"arch":            tt.opts.Arch,
 						"authorized_key":  authorizedKey,
 						"host_key": []map[string]any{
 							{
@@ -234,7 +249,7 @@ func TestBootService_ActivateRescue(t *testing.T) {
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 			ctx := context.Background()
 
-			rescue, err := client.Boot.ActivateRescue(ctx, ServerID(321), tt.os, tt.arch, tt.fingerprints)
+			rescue, err := client.Boot.ActivateRescue(ctx, ServerID(321), tt.opts)
 			if err != nil {
 				t.Fatalf("Boot.ActivateRescue returned error: %v", err)
 			}
@@ -267,6 +282,107 @@ func TestBootService_ActivateRescue(t *testing.T) {
 				t.Errorf("expected host key fingerprint 'c1:e4:...', got '%s'", rescue.HostKeys[0].Key.Fingerprint)
 			}
 		})
+	}
+}
+
+// TestBootService_ActivateRescue_OmitsOptionalFields asserts that arch and
+// keyboard are omitted from the POST body entirely when left at their zero
+// value, per the doc's Input table for POST /boot/{server-number}/rescue
+// (both are optional).
+func TestBootService_ActivateRescue_OmitsOptionalFields(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+		if _, present := r.Form["arch"]; present {
+			t.Errorf("expected arch to be omitted, got %q", r.FormValue("arch"))
+		}
+		if _, present := r.Form["keyboard"]; present {
+			t.Errorf("expected keyboard to be omitted, got %q", r.FormValue("keyboard"))
+		}
+
+		password := "test-password-123"
+		response := map[string]any{
+			"rescue": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"active":          true,
+				"os":              "linux",
+				"authorized_key":  []map[string]any{},
+				"host_key":        []map[string]any{},
+				"password":        password,
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if _, err := client.Boot.ActivateRescue(ctx, ServerID(321), RescueActivateOpts{OS: "linux"}); err != nil {
+		t.Fatalf("Boot.ActivateRescue returned error: %v", err)
+	}
+}
+
+// TestBootService_ActivateRescue_SendsOptionalFields asserts that arch and
+// keyboard are sent on the POST body when explicitly set.
+func TestBootService_ActivateRescue_SendsOptionalFields(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+		if r.FormValue("arch") != "64" {
+			t.Errorf("expected arch '64', got '%s'", r.FormValue("arch"))
+		}
+		if r.FormValue("keyboard") != "de" {
+			t.Errorf("expected keyboard 'de', got '%s'", r.FormValue("keyboard"))
+		}
+
+		password := "test-password-123"
+		response := map[string]any{
+			"rescue": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"active":          true,
+				"os":              "linux",
+				"arch":            64,
+				"authorized_key":  []map[string]any{},
+				"host_key":        []map[string]any{},
+				"password":        password,
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	opts := RescueActivateOpts{OS: "linux", Arch: 64, Keyboard: "de"}
+	if _, err := client.Boot.ActivateRescue(ctx, ServerID(321), opts); err != nil {
+		t.Fatalf("Boot.ActivateRescue returned error: %v", err)
+	}
+}
+
+// TestBootService_ActivateRescue_RequiresOS asserts that a missing OS is
+// rejected locally without making a request, per the doc's Input table for
+// POST /boot/{server-number}/rescue (os is the only required field).
+func TestBootService_ActivateRescue_RequiresOS(t *testing.T) {
+	client := NewClient("test-user", "test-pass", WithBaseURL("http://127.0.0.1:0"))
+	ctx := context.Background()
+
+	_, err := client.Boot.ActivateRescue(ctx, ServerID(321), RescueActivateOpts{})
+	if err == nil {
+		t.Fatal("expected error for missing os, got nil")
 	}
 }
 
@@ -435,7 +551,11 @@ func TestBootService_ActivateLinux(t *testing.T) {
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 			ctx := context.Background()
 
-			linux, err := client.Boot.ActivateLinux(ctx, ServerID(321), tt.dist, tt.arch, tt.lang, []string{})
+			linux, err := client.Boot.ActivateLinux(ctx, ServerID(321), LinuxActivateOpts{
+				Dist: tt.dist,
+				Arch: tt.arch,
+				Lang: tt.lang,
+			})
 			if err != nil {
 				t.Fatalf("Boot.ActivateLinux returned error: %v", err)
 			}
@@ -502,7 +622,7 @@ func TestBootService_ErrorHandling(t *testing.T) {
 			statusCode: http.StatusUnauthorized,
 			method:     "activaterescue",
 			setupFunc: func(c *Client, ctx context.Context) error {
-				_, err := c.Boot.ActivateRescue(ctx, ServerID(321), "linux", 64, []string{})
+				_, err := c.Boot.ActivateRescue(ctx, ServerID(321), RescueActivateOpts{OS: "linux", Arch: 64})
 				return err
 			},
 		},
@@ -588,7 +708,7 @@ func TestBootService_ActivateVNC(t *testing.T) {
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	ctx := context.Background()
 
-	vnc, err := client.Boot.ActivateVNC(ctx, ServerID(321), "Debian 12", 64, "en")
+	vnc, err := client.Boot.ActivateVNC(ctx, ServerID(321), VNCActivateOpts{Dist: "Debian 12", Arch: 64, Lang: "en"})
 	if err != nil {
 		t.Fatalf("Boot.ActivateVNC returned error: %v", err)
 	}
@@ -845,7 +965,7 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	ctx := context.Background()
 
-	rescue, err := client.Boot.ActivateRescue(ctx, ServerID(321), "linux", 64, []string{})
+	rescue, err := client.Boot.ActivateRescue(ctx, ServerID(321), RescueActivateOpts{OS: "linux", Arch: 64})
 	if err != nil {
 		t.Fatalf("Boot.ActivateRescue returned error: %v", err)
 	}
