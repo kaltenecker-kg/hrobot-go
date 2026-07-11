@@ -248,17 +248,45 @@ func (b *BootService) Get(ctx context.Context, serverID ServerID) (*BootConfig, 
 	return &config, nil
 }
 
-// ActivateRescue activates the rescue system. fingerprints are the
-// fingerprints of one or more SSH keys already stored in Robot; the API
-// does not accept full public keys here.
-func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, os string, arch int, fingerprints []string) (*RescueConfig, error) {
+// RescueActivateOpts are options for activating the rescue system.
+//
+// The doc's Input table for POST /boot/{server-number}/rescue lists os as
+// the only required field; authorized_key and keyboard are optional.
+type RescueActivateOpts struct {
+	// OS is the operating system to boot into, e.g. "linux" or "vkvm".
+	// Required.
+	OS string
+	// AuthorizedKeys are the fingerprints of one or more SSH keys already
+	// stored in Robot; the API does not accept full public keys here.
+	// Optional.
+	AuthorizedKeys []string
+	// Keyboard is the desired keyboard layout, e.g. "de". Optional;
+	// defaults to "us" on the API side when omitted.
+	Keyboard string
+	// Arch is deprecated upstream; omitted from the request when 0.
+	//
+	// Deprecated: the API ignores it and defaults to 64.
+	Arch int
+}
+
+// ActivateRescue activates the rescue system.
+func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, opts RescueActivateOpts) (*RescueConfig, error) {
+	if opts.OS == "" {
+		return nil, NewParseError("os is required", nil)
+	}
+
 	path := fmt.Sprintf("/boot/%s/rescue", serverID.String())
 
 	data := url.Values{}
-	data.Set("os", os)
-	data.Set("arch", fmt.Sprintf("%d", arch))
+	data.Set("os", opts.OS)
+	if opts.Arch != 0 {
+		data.Set("arch", fmt.Sprintf("%d", opts.Arch))
+	}
+	if opts.Keyboard != "" {
+		data.Set("keyboard", opts.Keyboard)
+	}
 
-	for _, fingerprint := range fingerprints {
+	for _, fingerprint := range opts.AuthorizedKeys {
 		data.Add("authorized_key[]", fingerprint)
 	}
 
@@ -288,16 +316,44 @@ func (b *BootService) GetLastRescue(ctx context.Context, serverID ServerID) (*Re
 	return &rescue, nil
 }
 
+// LinuxActivateOpts are options for activating a Linux installation.
+//
+// The doc's Input table for POST /boot/{server-number}/linux lists dist and
+// lang as required; authorized_key is optional.
+type LinuxActivateOpts struct {
+	// Dist is the distribution to install, e.g. "Ubuntu 22.04". Required.
+	Dist string
+	// Lang is the installation language, e.g. "en". Required.
+	Lang string
+	// AuthorizedKeys are the fingerprints of one or more SSH keys already
+	// stored in Robot; the API does not accept full public keys here.
+	// Optional.
+	AuthorizedKeys []string
+	// Arch is deprecated upstream; omitted from the request when 0.
+	//
+	// Deprecated: the API ignores it and defaults to 64.
+	Arch int
+}
+
 // ActivateLinux activates Linux installation.
-func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, dist string, arch int, lang string, authorizedKeys []string) (*LinuxConfig, error) {
+func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, opts LinuxActivateOpts) (*LinuxConfig, error) {
+	if opts.Dist == "" {
+		return nil, NewParseError("dist is required", nil)
+	}
+	if opts.Lang == "" {
+		return nil, NewParseError("lang is required", nil)
+	}
+
 	path := fmt.Sprintf("/boot/%s/linux", serverID.String())
 
 	data := url.Values{}
-	data.Set("dist", dist)
-	data.Set("arch", fmt.Sprintf("%d", arch))
-	data.Set("lang", lang)
+	data.Set("dist", opts.Dist)
+	data.Set("lang", opts.Lang)
+	if opts.Arch != 0 {
+		data.Set("arch", fmt.Sprintf("%d", opts.Arch))
+	}
 
-	for _, key := range authorizedKeys {
+	for _, key := range opts.AuthorizedKeys {
 		data.Add("authorized_key[]", key)
 	}
 
@@ -316,14 +372,38 @@ func (b *BootService) DeactivateLinux(ctx context.Context, serverID ServerID) er
 	return b.client.Delete(ctx, path)
 }
 
+// VNCActivateOpts are options for activating a VNC installation.
+//
+// The doc's Input table for POST /boot/{server-number}/vnc lists dist and
+// lang as required.
+type VNCActivateOpts struct {
+	// Dist is the distribution to install, e.g. "Debian 12". Required.
+	Dist string
+	// Lang is the installation language, e.g. "en". Required.
+	Lang string
+	// Arch is deprecated upstream; omitted from the request when 0.
+	//
+	// Deprecated: the API ignores it and defaults to 64.
+	Arch int
+}
+
 // ActivateVNC activates VNC installation.
-func (b *BootService) ActivateVNC(ctx context.Context, serverID ServerID, dist string, arch int, lang string) (*VNCConfig, error) {
+func (b *BootService) ActivateVNC(ctx context.Context, serverID ServerID, opts VNCActivateOpts) (*VNCConfig, error) {
+	if opts.Dist == "" {
+		return nil, NewParseError("dist is required", nil)
+	}
+	if opts.Lang == "" {
+		return nil, NewParseError("lang is required", nil)
+	}
+
 	path := fmt.Sprintf("/boot/%s/vnc", serverID.String())
 
 	data := url.Values{}
-	data.Set("dist", dist)
-	data.Set("arch", fmt.Sprintf("%d", arch))
-	data.Set("lang", lang)
+	data.Set("dist", opts.Dist)
+	data.Set("lang", opts.Lang)
+	if opts.Arch != 0 {
+		data.Set("arch", fmt.Sprintf("%d", opts.Arch))
+	}
 
 	var vnc VNCConfig
 	err := b.client.Post(ctx, path, data, &vnc)
