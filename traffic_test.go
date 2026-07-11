@@ -5,10 +5,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestTrafficService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/traffic" {
 			t.Errorf("expected path '/traffic', got '%s'", r.URL.Path)
 		}
@@ -87,7 +90,7 @@ func TestTrafficService_Get(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -156,7 +159,8 @@ func TestTrafficService_Get(t *testing.T) {
 }
 
 func TestTrafficService_Get_NoSingleValues(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("failed to parse form: %v", err)
 		}
@@ -200,7 +204,7 @@ func TestTrafficService_Get_NoSingleValues(t *testing.T) {
 		if _, err := w.Write([]byte(body)); err != nil {
 			t.Fatalf("failed to write response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -234,5 +238,70 @@ func TestTrafficService_Get_NoSingleValues(t *testing.T) {
 	}
 	if stats.Sum != 0.3355 {
 		t.Errorf("expected Sum 0.3355, got %v", stats.Sum)
+	}
+}
+
+// TestTrafficService_Get_MultipleIPsAndSubnets exercises the doc's "Query
+// traffic data for multiple IPs" and "...for subnet" examples, which use
+// repeated ip[]/subnet[] form keys.
+func TestTrafficService_Get_MultipleIPsAndSubnets(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("failed to parse form: %v", err)
+		}
+
+		gotIPs := r.Form["ip[]"]
+		if len(gotIPs) != 2 || gotIPs[0] != "123.123.123.123" || gotIPs[1] != "124.124.124.124" {
+			t.Errorf("expected ip[] ['123.123.123.123', '124.124.124.124'], got %v", gotIPs)
+		}
+		gotSubnets := r.Form["subnet[]"]
+		if len(gotSubnets) != 1 || gotSubnets[0] != "2a01:4f8:61:41a2::" {
+			t.Errorf("expected subnet[] ['2a01:4f8:61:41a2::'], got %v", gotSubnets)
+		}
+
+		// Doc-verbatim response shape for "Query traffic data for multiple
+		// IPs" (POST /traffic without single_values).
+		const body = `{
+			"traffic": {
+				"type": "month",
+				"from": "2010-09-01",
+				"to": "2010-09-31",
+				"data": {
+					"123.123.123.123": {
+						"in": 0.2874,
+						"out": 0.0481,
+						"sum": 0.3355
+					},
+					"124.124.124.124": {
+						"in": 0.2874,
+						"out": 0.0481,
+						"sum": 0.3355
+					}
+				}
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	traffic, err := client.Traffic.Get(ctx, TrafficGetParams{
+		Type:    TrafficTypeMonth,
+		From:    "2010-09-01",
+		To:      "2010-09-31",
+		IPs:     []string{"123.123.123.123", "124.124.124.124"},
+		Subnets: []string{"2a01:4f8:61:41a2::"},
+	})
+	if err != nil {
+		t.Fatalf("Traffic.Get returned error: %v", err)
+	}
+
+	if len(traffic.Data) != 2 {
+		t.Errorf("expected 2 entries in Data, got %d", len(traffic.Data))
 	}
 }

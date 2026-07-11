@@ -46,6 +46,16 @@
 // also excluded from schema-based form body validation; instead
 // validateVSwitchServerForm checks the key grammar by hand (see
 // vswitch.go).
+//
+// # Known exception: traffic ip[]/subnet[] bracket-keys
+//
+// The Robot API encodes POST /traffic's optional multi-value "ip" and
+// "subnet" parameters as repeated "ip[]=value"/"subnet[]=value" form keys
+// (see the doc's "Query traffic data for multiple IPs" and "...for
+// subnet" examples), the same bracket-key grammar OpenAPI 3's
+// form-urlencoded serialization cannot express. Requests to /traffic are
+// therefore also excluded from schema-based form body validation; instead
+// validateTrafficForm checks the key grammar by hand (see traffic.go).
 package spectest
 
 import (
@@ -165,11 +175,14 @@ func Handler(t Reporter, spec *Spec, inner http.Handler) http.Handler {
 
 		isFirewallBody := isFirewallRulesPath(r.URL.Path) && r.Method == http.MethodPost
 		isVSwitchServerBody := isVSwitchServerPath(r.URL.Path) && (r.Method == http.MethodPost || r.Method == http.MethodDelete)
+		isTrafficBody := isTrafficPath(r.URL.Path) && r.Method == http.MethodPost
 		switch {
 		case isFirewallBody:
 			validateFirewallForm(t, r.Method, r.URL.Path, bodyBytes)
 		case isVSwitchServerBody:
 			validateVSwitchServerForm(t, r.Method, r.URL.Path, bodyBytes)
+		case isTrafficBody:
+			validateTrafficForm(t, r.Method, r.URL.Path, bodyBytes)
 		default:
 			reqInput := &openapi3filter.RequestValidationInput{
 				Request:    r,

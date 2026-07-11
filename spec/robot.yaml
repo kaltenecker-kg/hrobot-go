@@ -1047,7 +1047,7 @@ paths:
       tags:
         - Reverse DNS
       parameters:
-        - $ref: '#/components/parameters/IPAddress'
+        - $ref: '#/components/parameters/RDNSIPAddress'
       responses:
         '200':
           description: Reverse DNS entry retrieved successfully
@@ -1070,7 +1070,7 @@ paths:
       tags:
         - Reverse DNS
       parameters:
-        - $ref: '#/components/parameters/IPAddress'
+        - $ref: '#/components/parameters/RDNSIPAddress'
       requestBody:
         required: true
         content:
@@ -1114,7 +1114,7 @@ paths:
       tags:
         - Reverse DNS
       parameters:
-        - $ref: '#/components/parameters/IPAddress'
+        - $ref: '#/components/parameters/RDNSIPAddress'
       requestBody:
         required: true
         content:
@@ -1158,7 +1158,7 @@ paths:
       tags:
         - Reverse DNS
       parameters:
-        - $ref: '#/components/parameters/IPAddress'
+        - $ref: '#/components/parameters/RDNSIPAddress'
       responses:
         '200':
           description: Reverse DNS entry deleted successfully
@@ -1171,10 +1171,17 @@ paths:
       x-rate-limit: "500 requests per 1 hour"
 
   # Traffic endpoints
+  # NOTE: the request body is not validated against a schema here because
+  # ip[]/subnet[] use the same literal (non-percent-encoded) bracket-key
+  # grammar as /vswitch/{vswitch-id}/server's server[] field, which OpenAPI
+  # 3 form-urlencoded serialization cannot express (see
+  # internal/spectest's package doc for the known-exception rationale).
+  # /traffic requests are excluded from schema-based form body validation
+  # the same way (see isTrafficPath in internal/spectest/spectest.go).
   /traffic:
     post:
       summary: Request traffic data
-      description: Request traffic data for servers and IPs
+      description: Query traffic data of IPs and subnets
       operationId: requestTrafficData
       tags:
         - Traffic
@@ -1184,28 +1191,65 @@ paths:
           application/x-www-form-urlencoded:
             schema:
               type: object
+              required:
+                - type
+                - from
+                - to
               properties:
-                server_ip:
+                ip:
                   type: string
-                  description: Server IP address
+                  description: A single IP address (shorthand for ip[] with one value)
+                  example: "123.123.123.123"
+                ip[]:
+                  type: array
+                  items:
+                    type: string
+                  description: One or more IP addresses
+                  example: ["123.123.123.123", "124.124.124.124"]
+                subnet[]:
+                  type: array
+                  items:
+                    type: string
+                  description: One or more subnet addresses
+                  example: ["2a01:4f8:61:41a2::"]
+                from:
+                  type: string
+                  description: >-
+                    Date/Time from. Format depends on "type": day
+                    ([YYYY]-[MM]-[DD]T[H]), month ([YYYY]-[MM]-[DD]), year
+                    ([YYYY]-[MM]).
+                  example: "2010-09-01"
+                to:
+                  type: string
+                  description: Date/Time to (same format as "from")
+                  example: "2010-09-31"
                 type:
                   type: string
                   enum: [day, month, year]
-                  description: Traffic data type
-                from:
+                  description: Type of traffic query
+                single_values:
                   type: string
-                  format: date
-                  description: Start date
-                to:
-                  type: string
-                  format: date
-                  description: End date
+                  enum: ["true"]
+                  description: >-
+                    If set to "true" the traffic data is returned not as a
+                    sum over the whole interval but grouped by hour, day or
+                    month (optional)
       responses:
         '200':
-          description: Traffic data request successful
+          description: Traffic data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Traffic'
         '400':
           $ref: '#/components/responses/InvalidInput'
-      x-rate-limit: "100 requests per 1 hour"
+        '404':
+          description: No IP addresses or subnets found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
 
   # SSH Keys endpoints
   /key:
@@ -1453,6 +1497,473 @@ paths:
           $ref: '#/components/responses/InvalidInput'
         '404':
           description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/password:
+    post:
+      summary: Reset Storage Box password
+      description: Reset password of storage box
+      operationId: resetStorageBoxPassword
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  nullable: true
+                  description: >-
+                    The password to be used. Robot generates a random
+                    password if the parameter is omitted
+      responses:
+        '200':
+          description: Storage Box password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageBoxPassword'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The chosen password is insecure or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/snapshot:
+    get:
+      summary: Get Storage Box snapshots
+      description: Query snapshots of a specific Storage Box
+      operationId: getStorageBoxSnapshots
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      responses:
+        '200':
+          description: Snapshots retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageBoxSnapshot'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Create Storage Box snapshot
+      description: Create new snapshot of a specific Storage Box
+      operationId: createStorageBoxSnapshot
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      responses:
+        '200':
+          description: Snapshot created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageBoxSnapshotCreated'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Snapshot limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/snapshot/{snapshot-name}:
+    delete:
+      summary: Delete Storage Box snapshot
+      description: Delete snapshot
+      operationId: deleteStorageBoxSnapshot
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+        - $ref: '#/components/parameters/SnapshotName'
+      responses:
+        '200':
+          description: Snapshot deleted successfully
+        '404':
+          description: Storage Box or snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+    post:
+      summary: Revert Storage Box to snapshot
+      description: Revert to snapshot
+      operationId: revertStorageBoxSnapshot
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+        - $ref: '#/components/parameters/SnapshotName'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - revert
+              properties:
+                revert:
+                  type: string
+                  enum: ["true"]
+                  description: Must be set to "true" to revert the snapshot
+      responses:
+        '200':
+          description: Storage Box reverted successfully
+        '400':
+          $ref: '#/components/responses/InvalidInput'
+        '404':
+          description: Storage Box or snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/snapshot/{snapshot-name}/comment:
+    post:
+      summary: Set Storage Box snapshot comment
+      description: Set comment of a specific snapshot
+      operationId: setStorageBoxSnapshotComment
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+        - $ref: '#/components/parameters/SnapshotName'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  description: Comment for the snapshot
+      responses:
+        '200':
+          description: Snapshot comment set successfully
+        '404':
+          description: Storage Box or snapshot not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/snapshotplan:
+    get:
+      summary: Get Storage Box snapshot plan
+      description: Query data of the snapshot plan of a specific Storage Box
+      operationId: getStorageBoxSnapshotPlan
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      responses:
+        '200':
+          description: Snapshot plan retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageBoxSnapshotPlan'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Edit Storage Box snapshot plan
+      description: Edit data of the snapshot plan of a specific Storage Box
+      operationId: setStorageBoxSnapshotPlan
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  description: New status of the snapshot plan
+                minute:
+                  type: integer
+                  description: Minute of execution. Only required if the plan is enabled
+                hour:
+                  type: integer
+                  description: Hour of execution. Only required if the plan is enabled
+                day_of_week:
+                  type: integer
+                  description: Weekday of execution (1 = Monday, ..., 7 = Sunday)
+                day_of_month:
+                  type: integer
+                  description: Monthday of execution (1 = First day of month)
+                month:
+                  type: integer
+                  description: Month of execution (1 = January)
+                max_snapshots:
+                  type: integer
+                  description: Maximum number of automatic snapshots of this plan
+      responses:
+        '200':
+          description: Snapshot plan updated successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageBoxSnapshotPlan'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/subaccount:
+    get:
+      summary: Get Storage Box sub-accounts
+      description: Query data of all sub-accounts of a specific Storage Box
+      operationId: getStorageBoxSubAccounts
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      responses:
+        '200':
+          description: Sub-accounts retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageBoxSubAccount'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "200 requests per 1 hour"
+
+    post:
+      summary: Create Storage Box sub-account
+      description: Creates a sub-account
+      operationId: createStorageBoxSubAccount
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - homedirectory
+              properties:
+                homedirectory:
+                  type: string
+                  description: Homedirectory of the sub-account
+                samba:
+                  type: boolean
+                  description: Status of Samba
+                ssh:
+                  type: boolean
+                  description: Status of SSH-Support
+                external_reachability:
+                  type: boolean
+                  description: Status of external reachability
+                webdav:
+                  type: boolean
+                  description: Status of WebDAV
+                readonly:
+                  type: boolean
+                  description: Status of the readonly mode
+                comment:
+                  type: string
+                  description: Custom comment
+                password:
+                  type: string
+                  nullable: true
+                  description: >-
+                    The password to be used. Robot generates a random
+                    password if the parameter is omitted
+      responses:
+        '200':
+          description: Sub-account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageBoxSubAccountCreated'
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: Sub-account limit exceeded or password is insecure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/subaccount/{sub-account-username}:
+    put:
+      summary: Update Storage Box sub-account
+      description: Update sub-account
+      operationId: updateStorageBoxSubAccount
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+        - $ref: '#/components/parameters/SubAccountUsername'
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                homedirectory:
+                  type: string
+                  description: Homedirectory of the sub-account
+                samba:
+                  type: boolean
+                  description: Status of Samba
+                ssh:
+                  type: boolean
+                  description: Status of SSH-Support
+                external_reachability:
+                  type: boolean
+                  description: Status of external reachability
+                webdav:
+                  type: boolean
+                  description: Status of WebDAV
+                readonly:
+                  type: boolean
+                  description: Status of the readonly mode
+                comment:
+                  type: string
+                  description: Custom comment
+      responses:
+        '200':
+          description: Sub-account updated successfully
+        '404':
+          description: Storage Box not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+    delete:
+      summary: Delete Storage Box sub-account
+      description: Delete sub-account
+      operationId: deleteStorageBoxSubAccount
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+        - $ref: '#/components/parameters/SubAccountUsername'
+      responses:
+        '200':
+          description: Sub-account deleted successfully
+        '404':
+          description: Storage Box or sub-account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      x-rate-limit: "1 request per 5 seconds"
+
+  /storagebox/{storagebox-id}/subaccount/{sub-account-username}/password:
+    post:
+      summary: Reset Storage Box sub-account password
+      description: Reset password of sub-account
+      operationId: resetStorageBoxSubAccountPassword
+      tags:
+        - Storage Box
+      parameters:
+        - $ref: '#/components/parameters/StorageBoxId'
+        - $ref: '#/components/parameters/SubAccountUsername'
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                password:
+                  type: string
+                  nullable: true
+                  description: >-
+                    The password to be used. Robot generates a random
+                    password if the parameter is omitted
+      responses:
+        '200':
+          description: Sub-account password reset successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StorageBoxPassword'
+        '404':
+          description: Storage Box or sub-account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: The chosen password is insecure or invalid
           content:
             application/json:
               schema:
@@ -2011,6 +2522,20 @@ components:
         type: string
         example: "123.123.123.123"
 
+    RDNSIPAddress:
+      name: ip
+      in: path
+      required: true
+      # Unlike the IP tag's /ip/{ip} (IPv4 addresses only), reverse DNS
+      # entries can be created for both IPv4 and IPv6 addresses (see the
+      # doc's GET/PUT/POST/DELETE /rdns/{ip} examples, and rdns_test.go's
+      # IPv6 cases), so this does not restrict format to ipv4 like the
+      # shared IPAddress parameter does.
+      description: IPv4 or IPv6 address
+      schema:
+        type: string
+        example: "123.123.123.123"
+
     FailoverIP:
       name: failover-ip
       in: path
@@ -2037,6 +2562,24 @@ components:
       schema:
         type: integer
         example: 123456
+
+    SnapshotName:
+      name: snapshot-name
+      in: path
+      required: true
+      description: Snapshot name
+      schema:
+        type: string
+        example: "2015-12-21T13-13-03"
+
+    SubAccountUsername:
+      name: sub-account-username
+      in: path
+      required: true
+      description: Sub-account username
+      schema:
+        type: string
+        example: "u2342-sub1"
 
     VSwitchId:
       name: vswitch-id
@@ -2802,8 +3345,70 @@ components:
               description: Key data in OpenSSH format
             created_at:
               type: string
-              format: date-time
-              description: Key creation date
+              # Not "format: date-time": the doc's examples use
+              # "2021-12-31 23:59:59" (space-separated, no timezone
+              # offset), which is not RFC3339 and fails OpenAPI's
+              # built-in date-time format validator.
+              description: Key creation date, e.g. "2021-12-31 23:59:59"
+              example: "2021-12-31 23:59:59"
+
+    Traffic:
+      type: object
+      properties:
+        traffic:
+          type: object
+          required:
+            - type
+            - from
+            - to
+            - data
+          properties:
+            type:
+              type: string
+              description: Traffic query type
+            from:
+              type: string
+              description: Date/Time from
+            to:
+              type: string
+              description: Date/Time to
+            data:
+              description: >-
+                Per-IP/subnet traffic. Without "single_values": an
+                aggregate per IP/subnet over the whole interval. With
+                "single_values": per-IP/subnet values grouped by hour, day
+                or month.
+              oneOf:
+                - type: object
+                  additionalProperties:
+                    $ref: '#/components/schemas/TrafficStats'
+                - type: object
+                  additionalProperties:
+                    type: object
+                    additionalProperties:
+                      $ref: '#/components/schemas/TrafficStats'
+
+    TrafficStats:
+      type: object
+      # required + additionalProperties:false make this shape structurally
+      # distinct from the single_values "data" branch (whose values are
+      # objects keyed by interval, not {in,out,sum}), which oneOf above
+      # needs to disambiguate the two "data" shapes unambiguously.
+      required:
+        - in
+        - out
+        - sum
+      additionalProperties: false
+      properties:
+        in:
+          type: number
+          description: traffic in (GB)
+        out:
+          type: number
+          description: traffic out (GB)
+        sum:
+          type: number
+          description: traffic sum (GB)
 
     StorageBoxBasic:
       type: object
@@ -2882,6 +3487,163 @@ components:
                 host_system:
                   type: string
                   description: Identifier of Storage Box host
+
+    StorageBoxPassword:
+      type: object
+      properties:
+        password:
+          type: string
+          description: Updated password of the storage box
+      # Not wrapped in a "storagebox"/"subaccount" envelope: both
+      # POST /storagebox/{id}/password and
+      # POST /storagebox/{id}/subaccount/{username}/password return this
+      # shape unwrapped at the top level per the doc's examples.
+
+    StorageBoxSnapshot:
+      type: object
+      properties:
+        snapshot:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Snapshot name
+            timestamp:
+              type: string
+              description: Timestamp of snapshot in UTC
+            size:
+              type: integer
+              description: Snapshot size in MB
+            filesystem_size:
+              type: integer
+              description: Size of the Storage Box at creation time of the snapshot in MB
+            automatic:
+              type: boolean
+              description: True if snapshot has been automatically created
+            comment:
+              type: string
+              description: Comment for the snapshot
+
+    StorageBoxSnapshotCreated:
+      type: object
+      properties:
+        snapshot:
+          type: object
+          description: >-
+            POST /storagebox/{id}/snapshot only returns name/timestamp/size
+            per the doc's example (the create response omits
+            filesystem_size/automatic/comment, unlike the list/GET shape).
+          properties:
+            name:
+              type: string
+              description: Snapshot name
+            timestamp:
+              type: string
+              description: Timestamp of snapshot in UTC
+            size:
+              type: integer
+              description: Snapshot size in MB
+
+    StorageBoxSnapshotPlan:
+      type: object
+      properties:
+        snapshotplan:
+          type: object
+          properties:
+            status:
+              type: string
+              description: Status of the snapshot plan
+            minute:
+              type: integer
+              nullable: true
+              description: Minute of the execution or null if plan is deactivated
+            hour:
+              type: integer
+              nullable: true
+              description: Hour of the execution or null if plan is deactivated
+            day_of_week:
+              type: integer
+              nullable: true
+              description: >-
+                Weekday of the execution or null if plan is deactivated or
+                value is not set (1 = Monday, ..., 7 = Sunday)
+            day_of_month:
+              type: integer
+              nullable: true
+              description: >-
+                Monthday of the execution or null if plan is deactivated or
+                value is not set (1 = First day of month)
+            month:
+              type: integer
+              nullable: true
+              description: >-
+                Month of the execution or null if plan is deactivated or
+                value is not set (1 = January)
+            max_snapshots:
+              type: integer
+              description: Maximum number of automatic snapshots of this plan
+
+    StorageBoxSubAccount:
+      type: object
+      properties:
+        subaccount:
+          type: object
+          properties:
+            username:
+              type: string
+              description: Username of the sub-account
+            accountid:
+              type: string
+              description: Username of the main user
+            server:
+              type: string
+              description: Server
+            homedirectory:
+              type: string
+              description: Homedirectory of the sub-account
+            samba:
+              type: boolean
+              description: Status of Samba
+            ssh:
+              type: boolean
+              description: Status of SSH-Support
+            external_reachability:
+              type: boolean
+              description: Status of external reachability
+            webdav:
+              type: boolean
+              description: Status of WebDAV
+            readonly:
+              type: boolean
+              description: Status of the readonly mode
+            createtime:
+              type: string
+              description: Time when the sub-account was created
+            comment:
+              type: string
+              description: Custom comment for the sub-account
+
+    StorageBoxSubAccountCreated:
+      type: object
+      properties:
+        subaccount:
+          type: object
+          properties:
+            username:
+              type: string
+              description: Username of the sub-account
+            password:
+              type: string
+              description: Password of the sub-account
+            accountid:
+              type: string
+              description: Username of the main user
+            server:
+              type: string
+              description: Server
+            homedirectory:
+              type: string
+              description: Homedirectory of the sub-account
 
     FirewallRule:
       type: object
