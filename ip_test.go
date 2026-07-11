@@ -177,78 +177,64 @@ func TestIPService_SetTrafficWarnings(t *testing.T) {
 	}
 }
 
-func TestIPService_GetTraffic(t *testing.T) {
+func TestIPService_NilIPGuard(t *testing.T) {
+	client := NewClient("test-user", "test-pass")
+	ctx := context.Background()
+
 	tests := []struct {
-		name        string
-		trafficType string
-		from        string
-		to          string
-		wantQuery   string
+		name     string
+		testFunc func() error
 	}{
 		{
-			name:        "daily traffic",
-			trafficType: "day",
-			from:        "2024-01-01",
-			to:          "2024-01-31",
-			wantQuery:   "from=2024-01-01&to=2024-01-31&type=day",
+			name: "Get with nil IP",
+			testFunc: func() error {
+				_, err := client.IP.Get(ctx, nil)
+				return err
+			},
 		},
 		{
-			name:        "monthly traffic without dates",
-			trafficType: "month",
-			from:        "",
-			to:          "",
-			wantQuery:   "type=month",
+			name: "SetTrafficWarnings with nil IP",
+			testFunc: func() error {
+				return client.IP.SetTrafficWarnings(ctx, nil, true)
+			},
+		},
+		{
+			name: "WithdrawIPCancellation with nil IP",
+			testFunc: func() error {
+				return client.IP.WithdrawIPCancellation(ctx, nil)
+			},
+		},
+		{
+			name: "GetMAC with nil IP",
+			testFunc: func() error {
+				_, err := client.IP.GetMAC(ctx, nil)
+				return err
+			},
+		},
+		{
+			name: "SetMAC with nil IP",
+			testFunc: func() error {
+				_, err := client.IP.SetMAC(ctx, nil)
+				return err
+			},
+		},
+		{
+			name: "DeleteMAC with nil IP",
+			testFunc: func() error {
+				return client.IP.DeleteMAC(ctx, nil)
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/traffic/123.123.123.123" {
-					t.Errorf("expected path '/traffic/123.123.123.123', got '%s'", r.URL.Path)
-				}
-
-				if r.Method != "GET" {
-					t.Errorf("expected GET request, got '%s'", r.Method)
-				}
-
-				if r.URL.RawQuery != tt.wantQuery {
-					t.Errorf("expected query '%s', got '%s'", tt.wantQuery, r.URL.RawQuery)
-				}
-
-				response := map[string]any{
-					"traffic": map[string]any{
-						"type": tt.trafficType,
-						"data": []map[string]any{
-							{
-								"timestamp": "2024-01-01 00:00:00",
-								"in":        1000000,
-								"out":       500000,
-							},
-						},
-					},
-				}
-				if err := json.NewEncoder(w).Encode(response); err != nil {
-					t.Fatalf("failed to encode response: %v", err)
-				}
-			}))
-			defer server.Close()
-
-			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-			ctx := context.Background()
-
-			ip := net.ParseIP("123.123.123.123")
-			traffic, err := client.IP.GetTraffic(ctx, ip, tt.trafficType, tt.from, tt.to)
-			if err != nil {
-				t.Fatalf("IP.GetTraffic returned error: %v", err)
+			err := tt.testFunc()
+			if err == nil {
+				t.Errorf("expected error for nil IP, got nil")
 			}
-
-			if traffic.Type != tt.trafficType {
-				t.Errorf("expected type '%s', got '%s'", tt.trafficType, traffic.Type)
-			}
-
-			if len(traffic.Data) != 1 {
-				t.Errorf("expected 1 data point, got %d", len(traffic.Data))
+			var e *Error
+			if !errors.As(err, &e) || e.Kind != ErrKindParse {
+				t.Errorf("expected parse error, got %T: %v", err, err)
 			}
 		})
 	}

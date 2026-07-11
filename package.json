@@ -1,0 +1,12 @@
+{
+  "name": "hrobot-go-hooks",
+  "private": true,
+  "description": "git-hook tooling for hrobot-go (husky only — not a node package)",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

@@ -13,6 +13,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 		input     string
 		wantBytes uint64
 		wantUnlim bool
+		wantRaw   string
 		wantErr   bool
 	}{
 		{
@@ -20,6 +21,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `"unlimited"`,
 			wantUnlim: true,
 			wantBytes: 0,
+			wantRaw:   "unlimited",
 			wantErr:   false,
 		},
 		{
@@ -27,6 +29,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `"5497558138880"`,
 			wantUnlim: false,
 			wantBytes: 5497558138880,
+			wantRaw:   "5497558138880",
 			wantErr:   false,
 		},
 		{
@@ -34,6 +37,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `"0"`,
 			wantUnlim: false,
 			wantBytes: 0,
+			wantRaw:   "0",
 			wantErr:   false,
 		},
 		{
@@ -41,6 +45,47 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `1099511627776`,
 			wantUnlim: false,
 			wantBytes: 1099511627776,
+			wantRaw:   "",
+			wantErr:   false,
+		},
+		{
+			name:      "5 TB",
+			input:     `"5 TB"`,
+			wantUnlim: false,
+			wantBytes: 5497558138880, // 5 * 1024^4
+			wantRaw:   "5 TB",
+			wantErr:   false,
+		},
+		{
+			name:      "2 TB",
+			input:     `"2 TB"`,
+			wantUnlim: false,
+			wantBytes: 2199023255552, // 2 * 1024^4
+			wantRaw:   "2 TB",
+			wantErr:   false,
+		},
+		{
+			name:      "20 TB",
+			input:     `"20 TB"`,
+			wantUnlim: false,
+			wantBytes: 21990232555520, // 20 * 1024^4
+			wantRaw:   "20 TB",
+			wantErr:   false,
+		},
+		{
+			name:      "null",
+			input:     `null`,
+			wantUnlim: false,
+			wantBytes: 0,
+			wantRaw:   "",
+			wantErr:   false,
+		},
+		{
+			name:      "garbage string",
+			input:     `"garbage"`,
+			wantUnlim: false,
+			wantBytes: 0,
+			wantRaw:   "garbage",
 			wantErr:   false,
 		},
 	}
@@ -60,6 +105,9 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			}
 			if ts.Bytes != tt.wantBytes {
 				t.Errorf("Bytes = %d, want %d", ts.Bytes, tt.wantBytes)
+			}
+			if ts.Raw != tt.wantRaw {
+				t.Errorf("Raw = %q, want %q", ts.Raw, tt.wantRaw)
 			}
 		})
 	}

@@ -8,6 +8,9 @@ import (
 )
 
 // IPService handles IP address related API operations.
+//
+// For reverse DNS operations, use Client.RDNS (RDNSService) instead.
+// For traffic statistics, use Client.Traffic (TrafficService) instead.
 type IPService struct {
 	client *Client
 }
@@ -29,6 +32,9 @@ func (i *IPService) List(ctx context.Context) ([]IPAddress, error) {
 
 // Get returns details for a specific IP address.
 func (i *IPService) Get(ctx context.Context, ip net.IP) (*IPAddress, error) {
+	if ip == nil {
+		return nil, NewParseError("invalid ip address", nil)
+	}
 	var ipAddr IPAddress
 	path := fmt.Sprintf("/ip/%s", ip.String())
 	err := i.client.Get(ctx, path, &ipAddr)
@@ -38,85 +44,11 @@ func (i *IPService) Get(ctx context.Context, ip net.IP) (*IPAddress, error) {
 	return &ipAddr, nil
 }
 
-// ReverseDNS represents reverse DNS configuration.
-type ReverseDNS struct {
-	IP  net.IP `json:"ip"`
-	PTR string `json:"ptr"`
-}
-
-// GetReverseDNS retrieves the reverse DNS entry for an IP.
-func (i *IPService) GetReverseDNS(ctx context.Context, ip net.IP) (*ReverseDNS, error) {
-	var rdns ReverseDNS
-	path := fmt.Sprintf("/rdns/%s", ip.String())
-	err := i.client.Get(ctx, path, &rdns)
-	if err != nil {
-		return nil, err
-	}
-	return &rdns, nil
-}
-
-// SetReverseDNS sets the reverse DNS entry for an IP.
-func (i *IPService) SetReverseDNS(ctx context.Context, ip net.IP, ptr string) (*ReverseDNS, error) {
-	var rdns ReverseDNS
-	path := fmt.Sprintf("/rdns/%s", ip.String())
-
-	data := url.Values{}
-	data.Set("ptr", ptr)
-
-	err := i.client.Post(ctx, path, data, &rdns)
-	if err != nil {
-		return nil, err
-	}
-
-	return &rdns, nil
-}
-
-// DeleteReverseDNS removes the reverse DNS entry for an IP.
-func (i *IPService) DeleteReverseDNS(ctx context.Context, ip net.IP) error {
-	path := fmt.Sprintf("/rdns/%s", ip.String())
-	return i.client.Delete(ctx, path)
-}
-
-// TrafficData represents traffic statistics.
-type TrafficData struct {
-	Type string         `json:"type"`
-	Data []TrafficEntry `json:"data"`
-}
-
-// TrafficEntry represents a single traffic data point.
-type TrafficEntry struct {
-	Timestamp string `json:"timestamp"`
-	In        uint64 `json:"in"`
-	Out       uint64 `json:"out"`
-}
-
-// GetTraffic retrieves traffic data for an IP.
-func (i *IPService) GetTraffic(ctx context.Context, ip net.IP, trafficType string, from, to string) (*TrafficData, error) {
-	var traffic TrafficData
-	path := fmt.Sprintf("/traffic/%s", ip.String())
-
-	// Add query parameters
-	params := url.Values{}
-	params.Set("type", trafficType)
-	if from != "" {
-		params.Set("from", from)
-	}
-	if to != "" {
-		params.Set("to", to)
-	}
-
-	fullPath := fmt.Sprintf("%s?%s", path, params.Encode())
-
-	err := i.client.Get(ctx, fullPath, &traffic)
-	if err != nil {
-		return nil, err
-	}
-
-	return &traffic, nil
-}
-
 // SetTrafficWarnings enables or disables traffic warnings.
 func (i *IPService) SetTrafficWarnings(ctx context.Context, ip net.IP, enabled bool) error {
+	if ip == nil {
+		return NewParseError("invalid ip address", nil)
+	}
 	path := fmt.Sprintf("/ip/%s", ip.String())
 
 	data := url.Values{}
@@ -139,6 +71,9 @@ func (i *IPService) CancelIP(context.Context, net.IP, string) error {
 
 // WithdrawIPCancellation withdraws an IP cancellation.
 func (i *IPService) WithdrawIPCancellation(ctx context.Context, ip net.IP) error {
+	if ip == nil {
+		return NewParseError("invalid ip address", nil)
+	}
 	path := fmt.Sprintf("/ip/%s/cancellation", ip.String())
 	return i.client.Delete(ctx, path)
 }
@@ -155,6 +90,9 @@ type IPMAC struct {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-ip-ip-mac
 func (i *IPService) GetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
+	if ip == nil {
+		return nil, NewParseError("invalid ip address", nil)
+	}
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
 	var mac IPMAC
 	if err := i.client.Get(ctx, path, &mac); err != nil {
@@ -169,6 +107,9 @@ func (i *IPService) GetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#put-ip-ip-mac
 func (i *IPService) SetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
+	if ip == nil {
+		return nil, NewParseError("invalid ip address", nil)
+	}
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
 	var mac IPMAC
 	if err := i.client.Put(ctx, path, nil, &mac); err != nil {
@@ -183,6 +124,9 @@ func (i *IPService) SetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#delete-ip-ip-mac
 func (i *IPService) DeleteMAC(ctx context.Context, ip net.IP) error {
+	if ip == nil {
+		return NewParseError("invalid ip address", nil)
+	}
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
 	return i.client.Delete(ctx, path)
 }

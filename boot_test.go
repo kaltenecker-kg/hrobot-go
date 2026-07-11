@@ -26,8 +26,8 @@ func TestBootService_Get(t *testing.T) {
 					"active":         false,
 					"os":             []string{"linux", "linuxold", "vkvm"},
 					"arch":           []int{64},
-					"authorized_key": []string{},
-					"host_key":       []string{},
+					"authorized_key": []map[string]any{},
+					"host_key":       []map[string]any{},
 				},
 				"linux": map[string]any{
 					"server_ip":      "123.123.123.123",
@@ -36,8 +36,8 @@ func TestBootService_Get(t *testing.T) {
 					"arch":           []int{64},
 					"lang":           []string{"en"},
 					"active":         false,
-					"authorized_key": []string{},
-					"host_key":       []string{},
+					"authorized_key": []map[string]any{},
+					"host_key":       []map[string]any{},
 				},
 			},
 		}
@@ -78,28 +78,28 @@ func TestBootService_Get(t *testing.T) {
 
 func TestBootService_ActivateRescue(t *testing.T) {
 	tests := []struct {
-		name           string
-		os             string
-		arch           int
-		authorizedKeys []string
+		name         string
+		os           string
+		arch         int
+		fingerprints []string
 	}{
 		{
-			name:           "linux rescue with keys",
-			os:             "linux",
-			arch:           64,
-			authorizedKeys: []string{"ssh-rsa AAAAB3NzaC1yc2EA..."},
+			name:         "linux rescue with keys",
+			os:           "linux",
+			arch:         64,
+			fingerprints: []string{"15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb"},
 		},
 		{
-			name:           "linux rescue without keys",
-			os:             "linux",
-			arch:           64,
-			authorizedKeys: []string{},
+			name:         "linux rescue without keys",
+			os:           "linux",
+			arch:         64,
+			fingerprints: []string{},
 		},
 		{
-			name:           "vkvm rescue",
-			os:             "vkvm",
-			arch:           64,
-			authorizedKeys: []string{"ssh-ed25519 AAAAC3NzaC1lZDI1..."},
+			name:         "vkvm rescue",
+			os:           "vkvm",
+			arch:         64,
+			fingerprints: []string{"c1:e4:47:2d:f5:0a:1b:22:33:44:55:66:77:88:99:00"},
 		},
 	}
 
@@ -125,10 +125,24 @@ func TestBootService_ActivateRescue(t *testing.T) {
 					t.Errorf("expected arch '64', got '%s'", r.FormValue("arch"))
 				}
 
-				// Check authorized keys
+				// Check authorized key fingerprints
 				formKeys := r.Form["authorized_key[]"]
-				if len(formKeys) != len(tt.authorizedKeys) {
-					t.Errorf("expected %d authorized keys, got %d", len(tt.authorizedKeys), len(formKeys))
+				if len(formKeys) != len(tt.fingerprints) {
+					t.Errorf("expected %d authorized keys, got %d", len(tt.fingerprints), len(formKeys))
+				}
+
+				authorizedKey := []map[string]any{}
+				if len(tt.fingerprints) > 0 {
+					authorizedKey = []map[string]any{
+						{
+							"key": map[string]any{
+								"name":        "key1",
+								"fingerprint": tt.fingerprints[0],
+								"type":        "ED25519",
+								"size":        256,
+							},
+						},
+					}
 				}
 
 				password := "test-password-123"
@@ -139,9 +153,17 @@ func TestBootService_ActivateRescue(t *testing.T) {
 						"active":         true,
 						"os":             tt.os,
 						"arch":           tt.arch,
-						"authorized_key": tt.authorizedKeys,
-						"host_key":       []string{"AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."},
-						"password":       password,
+						"authorized_key": authorizedKey,
+						"host_key": []map[string]any{
+							{
+								"key": map[string]any{
+									"fingerprint": "c1:e4:47:2d:f5:0a:1b:22:33:44:55:66:77:88:99:00",
+									"type":        "DSA",
+									"size":        1024,
+								},
+							},
+						},
+						"password": password,
 					},
 				}
 				if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -153,7 +175,7 @@ func TestBootService_ActivateRescue(t *testing.T) {
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 			ctx := context.Background()
 
-			rescue, err := client.Boot.ActivateRescue(ctx, ServerID(321), tt.os, tt.arch, tt.authorizedKeys)
+			rescue, err := client.Boot.ActivateRescue(ctx, ServerID(321), tt.os, tt.arch, tt.fingerprints)
 			if err != nil {
 				t.Fatalf("Boot.ActivateRescue returned error: %v", err)
 			}
@@ -168,6 +190,22 @@ func TestBootService_ActivateRescue(t *testing.T) {
 
 			if rescue.Password == nil {
 				t.Error("expected password to be set")
+			}
+
+			if len(tt.fingerprints) > 0 {
+				if len(rescue.AuthorizedKeys) != 1 {
+					t.Fatalf("expected 1 authorized key, got %d", len(rescue.AuthorizedKeys))
+				}
+				if rescue.AuthorizedKeys[0].Key.Fingerprint != tt.fingerprints[0] {
+					t.Errorf("expected fingerprint '%s', got '%s'", tt.fingerprints[0], rescue.AuthorizedKeys[0].Key.Fingerprint)
+				}
+			}
+
+			if len(rescue.HostKeys) != 1 {
+				t.Fatalf("expected 1 host key, got %d", len(rescue.HostKeys))
+			}
+			if rescue.HostKeys[0].Key.Fingerprint != "c1:e4:47:2d:f5:0a:1b:22:33:44:55:66:77:88:99:00" {
+				t.Errorf("expected host key fingerprint 'c1:e4:...', got '%s'", rescue.HostKeys[0].Key.Fingerprint)
 			}
 		})
 	}
@@ -207,14 +245,23 @@ func TestBootService_GetLastRescue(t *testing.T) {
 		password := "previous-password-456"
 		response := map[string]any{
 			"rescue": map[string]any{
-				"server_ip":      "123.123.123.123",
-				"server_number":  321,
-				"active":         false,
-				"os":             "linux",
-				"arch":           64,
-				"authorized_key": []string{"ssh-rsa AAAAB3NzaC1yc2EA..."},
-				"host_key":       []string{},
-				"password":       password,
+				"server_ip":     "123.123.123.123",
+				"server_number": 321,
+				"active":        false,
+				"os":            "linux",
+				"arch":          64,
+				"authorized_key": []map[string]any{
+					{
+						"key": map[string]any{
+							"name":        "key1",
+							"fingerprint": "15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb",
+							"type":        "ED25519",
+							"size":        256,
+						},
+					},
+				},
+				"host_key": []map[string]any{},
+				"password": password,
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -239,6 +286,13 @@ func TestBootService_GetLastRescue(t *testing.T) {
 		t.Error("expected password to be set")
 	} else if *rescue.Password != "previous-password-456" {
 		t.Errorf("expected password 'previous-password-456', got '%s'", *rescue.Password)
+	}
+
+	if len(rescue.AuthorizedKeys) != 1 {
+		t.Fatalf("expected 1 authorized key, got %d", len(rescue.AuthorizedKeys))
+	}
+	if rescue.AuthorizedKeys[0].Key.Fingerprint != "15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb" {
+		t.Errorf("expected fingerprint '15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb', got '%s'", rescue.AuthorizedKeys[0].Key.Fingerprint)
 	}
 }
 
@@ -635,8 +689,8 @@ func TestBootService_ActivateRescue_EmptyKeys(t *testing.T) {
 				"active":         true,
 				"os":             "linux",
 				"arch":           64,
-				"authorized_key": []string{},
-				"host_key":       []string{},
+				"authorized_key": []map[string]any{},
+				"host_key":       []map[string]any{},
 				"password":       password,
 			},
 		}

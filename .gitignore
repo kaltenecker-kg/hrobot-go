@@ -40,3 +40,6 @@ GEMINI.md
 
 # Git worktrees
 .worktrees/
+
+# Node (husky tooling)
+node_modules/
