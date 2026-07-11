@@ -39,12 +39,12 @@ the way.
 | boot          | verified   | Gist lacked linux/vnc/windows boot paths; added, plus a schema bug fix. See "boot tag fixes" below. |
 | firewall      | verified   | Gist lacked `firewall/template/{id}`; added. See "firewall tag fixes" below. |
 | vswitch       | verified   | See "vswitch tag fixes" below.                                        |
-| rdns          | unverified |                                                                        |
-| failover      | unverified |                                                                        |
+| rdns          | verified   | See "rdns tag fixes" below.                                            |
+| failover      | verified   | Clean — see "failover tag fixes" below.                                |
 | wol           | verified   | No spec changes needed; see "wol tag fixes" below.                     |
-| traffic       | unverified |                                                                        |
-| key           | unverified |                                                                        |
-| storagebox    | unverified | Gist lacks snapshot/subaccount sub-paths per the issue plan.           |
+| traffic       | verified   | Spec had no request/response modeling at all; rewritten. See "traffic tag fixes" below. |
+| key           | verified   | See "key tag fixes" below.                                             |
+| storagebox    | verified   | Authored the missing password/snapshot/snapshotplan/subaccount paths. See "storagebox tag fixes" below. |
 
 Untracked/out of scope: `/order/*` (server ordering/auction/cancellation) is
 policy-stubbed in this client (see project scope notes) and is not part of
@@ -254,3 +254,121 @@ fix above. All other `boot_test.go` suites are now wrapped too; several
 asserted on a bare `200` with no body, but the doc's `DELETE` examples for
 these endpoints return the full deactivated-state resource, so those
 fixtures were corrected to match.
+### rdns tag fixes
+
+Verified against the doc's `Reverse DNS` section (`GET /rdns`,
+`GET|PUT|POST|DELETE /rdns/{ip}`). Fix made to the spec:
+
+- The shared `components.parameters.IPAddress` path parameter (used by both
+  the `ip` and `rdns` tags) restricted `ip` to `format: ipv4`. The `rdns`
+  tag's `{ip}` path parameter accepts IPv6 addresses too — the doc's own
+  wording and `rdns_test.go`'s existing IPv6 test cases (e.g.
+  `2001:db8::1`) confirm this — so a new `components.parameters.RDNSIPAddress`
+  parameter (no `format: ipv4` restriction) was added and wired into all
+  four `/rdns/{ip}` operations instead of loosening the shared `IPAddress`
+  parameter, which the `ip` tag's IPv4-only endpoints still correctly use.
+
+Confirmed already correct (no change needed): the `{"rdns": {...}}` response
+envelope on every operation, the `[{"rdns": {...}}]` list envelope on
+`GET /rdns`, and the doc's `server_ip` query filter on `GET /rdns` (that one
+correctly stays IPv4-only, matching the `ip` tag convention for "server main
+IP" fields).
+
+### failover tag fixes
+
+Verified against the doc's `Failover` section (`GET /failover`,
+`GET|POST|DELETE /failover/{failover-ip}`). No spec changes were needed —
+`components.schemas.FailoverIP` already modeled the doc's `{"failover":
+{...}}` envelope, `active_server_ip` nullability, and IPv6-capable
+`failover-ip` path parameter correctly, and the existing rate limits and
+error codes matched the doc exactly.
+
+### traffic tag fixes
+
+Verified against the doc's `Traffic` section (`POST /traffic`). The spec had
+essentially no correct modeling of this endpoint — it documented completely
+different parameters (`server_ip`, `type`/`from`/`to` as `format: date`) and
+no response schema at all, none of which matched the doc's actual `type`
+(day/month/year, not a date format), `from`/`to` (free-form strings whose
+format depends on `type`, not RFC 3339 dates), or `ip[]`/`subnet[]`/
+`single_values` parameters. Rewritten to match:
+
+- Added the `Traffic`/`TrafficStats` schemas modeling the `{"traffic":
+  {type, from, to, data}}` envelope, with `data`'s two documented shapes
+  (aggregate-per-IP without `single_values`, per-IP-per-interval with it)
+  captured via `oneOf`. `TrafficStats` needed `required: [in, out, sum]` +
+  `additionalProperties: false` to make the two `oneOf` branches
+  structurally distinguishable — otherwise kin-openapi reported "input
+  matches more than one oneOf schemas", since an unconstrained object
+  schema also loosely accepts the per-interval shape's nested objects.
+- New known exception (same pattern as firewall/vswitch bracket-keys): the
+  doc's "multiple IPs" and "subnet" examples encode `ip[]=`/`subnet[]=` as
+  repeated bracket-key form fields, which OpenAPI 3 form-urlencoded
+  serialization cannot express as schema-validated array properties.
+  `internal/spectest/traffic.go` validates the key grammar by hand
+  (`validateTrafficForm`), wired into `internal/spectest/spectest.go`
+  alongside the existing firewall/vswitch exceptions.
+
+**Code bug fixed**: `TrafficService.Get`/`TrafficGetParams` (`traffic.go`)
+only ever supported a single `ip` value and had no way to query by subnet at
+all, even though the doc documents `ip[]`/`subnet[]` as the primary
+multi-value request shape (a single `ip=` is shown as one example among
+several). Added `TrafficGetParams.IPs []string` and `.Subnets []string`
+(alongside the existing single-value `IP` field, kept for
+backwards-compatible callers), encoded as literal `ip[]=`/`subnet[]=` form
+keys the same way `VSwitchService.AddServers` encodes `server[]=`.
+
+### key tag fixes
+
+Verified against the doc's `SSH keys` section (`GET|POST /key`,
+`GET|POST|DELETE /key/{fingerprint}`). Fix made to the spec:
+
+- `components.schemas.SSHKey.properties.key.properties.created_at` was
+  `format: date-time` (RFC 3339), but the doc's examples use
+  `"2021-12-31 23:59:59"` (space-separated, no timezone offset), which
+  kin-openapi's built-in `date-time` format validator rejects (confirmed by
+  running `key_test.go` against the spec before this fix: every test
+  failed response validation). Removed `format: date-time`, since
+  `key.go`'s `BerlinTime.UnmarshalJSON` already parses this exact
+  space-separated format alongside RFC 3339 as a fallback.
+
+Confirmed already correct (no change needed): the `{"key": {...}}` envelope,
+list envelope, and all input/output fields for create/rename/delete.
+
+### storagebox tag fixes
+
+The vendored gist only had `GET /storagebox`, `GET /storagebox/{id}`, and
+`POST /storagebox/{id}` — every other path `storagebox.go` calls was
+missing from the spec. Authored, matching the doc's Input tables and
+response examples exactly:
+
+- `POST /storagebox/{id}/password` and
+  `POST /storagebox/{id}/subaccount/{username}/password` — both share a new
+  unwrapped `StorageBoxPassword` schema (`{"password": "..."}`, no
+  `storagebox`/`subaccount` envelope, per the doc's examples).
+- `GET|POST /storagebox/{id}/snapshot` — list uses the existing
+  `StorageBoxSnapshot` shape; a new `StorageBoxSnapshotCreated` schema
+  models the create response, which the doc's example shows returning only
+  `name`/`timestamp`/`size` (omitting `filesystem_size`/`automatic`/
+  `comment`, unlike the list/GET shape).
+- `DELETE|POST /storagebox/{id}/snapshot/{name}` (delete, revert) and
+  `POST /storagebox/{id}/snapshot/{name}/comment` — new `SnapshotName` path
+  parameter; both documented as "No output"/plain 200.
+- `GET|POST /storagebox/{id}/snapshotplan` — new `StorageBoxSnapshotPlan`
+  schema. Both GET and POST return a single-element array
+  (`[{"snapshotplan": {...}}]`) per the doc's examples, even though POST
+  updates one plan; `storagebox.go`'s `decodeSnapshotPlanResponse` already
+  unwraps this correctly. (The doc's Output section prose mislabels the
+  wrapper as `storagebox (Object)` for this endpoint — trusted the JSON
+  example's actual `snapshotplan` key over the prose typo, per doc
+  precedence rules.)
+- `GET|POST /storagebox/{id}/subaccount` and
+  `PUT|DELETE /storagebox/{id}/subaccount/{username}` — new
+  `StorageBoxSubAccount`/`StorageBoxSubAccountCreated` schemas and
+  `SubAccountUsername` path parameter. `StorageBoxSubAccountCreated` (the
+  POST response) additionally carries `password`, matching the doc's create
+  example.
+
+No changes were needed to the previously-verified `storagebox`/
+`storagebox/{id}` paths or the `StorageBoxBasic`/`StorageBoxDetailed`
+schemas.
