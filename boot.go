@@ -26,32 +26,46 @@ type BootConfig struct {
 	CPanel  *CPanelConfig  `json:"cpanel,omitempty"`
 }
 
+// BootKey describes one SSH key attached to a rescue/linux activation.
+type BootKey struct {
+	Key BootKeyDetail `json:"key"`
+}
+
+// BootKeyDetail holds the metadata the API returns for an SSH key attached
+// to a rescue/linux activation.
+type BootKeyDetail struct {
+	Name        string `json:"name"`
+	Fingerprint string `json:"fingerprint"`
+	Type        string `json:"type"`
+	Size        int    `json:"size"`
+}
+
 // RescueConfig represents rescue system configuration.
 type RescueConfig struct {
-	ServerIP       string   `json:"server_ip"`
-	ServerIPv6Net  string   `json:"server_ipv6_net"`
-	ServerNumber   int      `json:"server_number"`
-	Active         bool     `json:"active"`
-	OS             any      `json:"os,omitempty"`   // string when active, []string when not
-	Arch           any      `json:"arch,omitempty"` // int when active, []int when not
-	AuthorizedKeys []string `json:"authorized_key,omitempty"`
-	HostKey        []string `json:"host_key,omitempty"`
-	Password       *string  `json:"password,omitempty"`
+	ServerIP       string    `json:"server_ip"`
+	ServerIPv6Net  string    `json:"server_ipv6_net"`
+	ServerNumber   int       `json:"server_number"`
+	Active         bool      `json:"active"`
+	OS             any       `json:"os,omitempty"`   // string when active, []string when not
+	Arch           any       `json:"arch,omitempty"` // int when active, []int when not
+	AuthorizedKeys []BootKey `json:"authorized_key,omitempty"`
+	HostKeys       []BootKey `json:"host_key,omitempty"`
+	Password       *string   `json:"password,omitempty"`
 }
 
 // LinuxConfig represents Linux installation configuration.
 type LinuxConfig struct {
-	ServerIP       string   `json:"server_ip"`
-	ServerIPv6Net  string   `json:"server_ipv6_net"`
-	ServerNumber   int      `json:"server_number"`
-	Dist           any      `json:"dist"` // string when active, []string when not
-	Arch           any      `json:"arch"` // int when active, []int when not
-	Lang           any      `json:"lang"` // string when active, []string when not
-	Active         bool     `json:"active"`
-	Hostname       string   `json:"hostname,omitempty"`
-	Password       *string  `json:"password,omitempty"`
-	AuthorizedKeys []string `json:"authorized_key,omitempty"`
-	HostKey        []string `json:"host_key,omitempty"`
+	ServerIP       string    `json:"server_ip"`
+	ServerIPv6Net  string    `json:"server_ipv6_net"`
+	ServerNumber   int       `json:"server_number"`
+	Dist           any       `json:"dist"` // string when active, []string when not
+	Arch           any       `json:"arch"` // int when active, []int when not
+	Lang           any       `json:"lang"` // string when active, []string when not
+	Active         bool      `json:"active"`
+	Hostname       string    `json:"hostname,omitempty"`
+	Password       *string   `json:"password,omitempty"`
+	AuthorizedKeys []BootKey `json:"authorized_key,omitempty"`
+	HostKeys       []BootKey `json:"host_key,omitempty"`
 }
 
 // VNCConfig represents VNC configuration.
@@ -234,16 +248,18 @@ func (b *BootService) Get(ctx context.Context, serverID ServerID) (*BootConfig, 
 	return &config, nil
 }
 
-// ActivateRescue activates the rescue system.
-func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, os string, arch int, authorizedKeys []string) (*RescueConfig, error) {
+// ActivateRescue activates the rescue system. fingerprints are the
+// fingerprints of one or more SSH keys already stored in Robot; the API
+// does not accept full public keys here.
+func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, os string, arch int, fingerprints []string) (*RescueConfig, error) {
 	path := fmt.Sprintf("/boot/%s/rescue", serverID.String())
 
 	data := url.Values{}
 	data.Set("os", os)
 	data.Set("arch", fmt.Sprintf("%d", arch))
 
-	for _, key := range authorizedKeys {
-		data.Add("authorized_key[]", key)
+	for _, fingerprint := range fingerprints {
+		data.Add("authorized_key[]", fingerprint)
 	}
 
 	var rescue RescueConfig
