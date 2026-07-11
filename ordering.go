@@ -3,6 +3,7 @@ package hrobot
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"time"
 )
@@ -128,30 +129,16 @@ type AddonOrder struct {
 	Test bool
 }
 
-// TransactionKey represents a key in a transaction response.
-type TransactionKey struct {
-	Key SSHKey `json:"key"`
-}
-
-// TransactionHostKey represents a host key in a transaction response.
-type TransactionHostKey struct {
-	Key struct {
-		Fingerprint string `json:"fingerprint"`
-		Type        string `json:"type"`
-		Size        int    `json:"size"`
-	} `json:"key"`
-}
-
 // Transaction represents a purchase transaction.
 type Transaction struct {
-	ID            string               `json:"id"`
-	Date          BerlinTime           `json:"date"`
-	Status        string               `json:"status"`
-	ServerNumber  *int                 `json:"server_number"`
-	ServerIP      *string              `json:"server_ip"`
-	AuthorizedKey []TransactionKey     `json:"authorized_key"`
-	HostKey       []TransactionHostKey `json:"host_key"`
-	Comment       *string              `json:"comment"`
+	ID            string     `json:"id"`
+	Date          BerlinTime `json:"date"`
+	Status        string     `json:"status"`
+	ServerNumber  *int       `json:"server_number"`
+	ServerIP      *string    `json:"server_ip"`
+	AuthorizedKey []BootKey  `json:"authorized_key"`
+	HostKey       []BootKey  `json:"host_key"`
+	Comment       *string    `json:"comment"`
 }
 
 // MarketTransaction represents a marketplace server purchase transaction.
@@ -169,22 +156,22 @@ type AddonTransaction struct {
 
 // PurchasedMarketProduct represents a server purchased from the market.
 type PurchasedMarketProduct struct {
-	ID           string   `json:"id"` // Can be numeric string or product name string
-	Name         string   `json:"name"`
-	Description  []string `json:"description"`
-	Traffic      string   `json:"traffic"`
-	Dist         string   `json:"dist"`
-	Arch         int      `json:"arch"`
-	Lang         string   `json:"lang"`
-	Location     *string  `json:"location"`
-	Datacenter   *string  `json:"datacenter"`
-	CPU          string   `json:"cpu"`
-	CPUBenchmark uint32   `json:"cpu_benchmark"`
-	MemorySize   float64  `json:"memory_size"`
-	HDDSize      float64  `json:"hdd_size"`
-	HDDText      string   `json:"hdd_text"`
-	HDDCount     uint8    `json:"hdd_count"`
-	NetworkSpeed *string  `json:"network_speed"`
+	ID           FlexibleID `json:"id"` // Numeric for market transactions (e.g. 283693), string like "EX40" for server transactions
+	Name         string     `json:"name"`
+	Description  []string   `json:"description"`
+	Traffic      string     `json:"traffic"`
+	Dist         string     `json:"dist"`
+	Arch         string     `json:"arch"` // Deprecated upstream; API sends it as a string (e.g. "64")
+	Lang         string     `json:"lang"`
+	Location     *string    `json:"location"`
+	Datacenter   *string    `json:"datacenter"`
+	CPU          string     `json:"cpu"`
+	CPUBenchmark uint32     `json:"cpu_benchmark"`
+	MemorySize   float64    `json:"memory_size"`
+	HDDSize      float64    `json:"hdd_size"`
+	HDDText      string     `json:"hdd_text"`
+	HDDCount     uint8      `json:"hdd_count"`
+	NetworkSpeed *string    `json:"network_speed"`
 }
 
 // PurchasedAddon represents an addon that was purchased.
@@ -286,7 +273,14 @@ func (o *OrderingService) GetAddonTransaction(ctx context.Context, transactionID
 }
 
 // WaitForMarketTransactionCompletion polls the transaction status until it's completed or an error occurs.
+//
+// checkInterval controls the polling frequency; if it is zero or negative, it
+// defaults to 30 seconds.
 func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context, transactionID string, checkInterval time.Duration) (*MarketTransaction, error) {
+	if checkInterval <= 0 {
+		checkInterval = 30 * time.Second
+	}
+
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
 
@@ -296,13 +290,14 @@ func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context
 		return nil, err
 	}
 
-	fmt.Printf("[DEBUG] Transaction %s status: %s\n", transactionID, tx.Status)
+	o.client.logger.LogAttrs(ctx, slog.LevelDebug, "transaction status",
+		slog.String("id", transactionID), slog.String("status", tx.Status))
 
 	switch tx.Status {
 	case "ready":
 		return tx, nil
 	case "cancelled", "error":
-		return tx, fmt.Errorf("transaction %s: %s", tx.Status, tx.Status)
+		return tx, fmt.Errorf("transaction %s: %s", transactionID, tx.Status)
 	}
 
 	for {
@@ -315,13 +310,14 @@ func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context
 				return nil, err
 			}
 
-			fmt.Printf("[DEBUG] Transaction %s status: %s\n", transactionID, tx.Status)
+			o.client.logger.LogAttrs(ctx, slog.LevelDebug, "transaction status",
+				slog.String("id", transactionID), slog.String("status", tx.Status))
 
 			switch tx.Status {
 			case "ready":
 				return tx, nil
 			case "cancelled", "error":
-				return tx, fmt.Errorf("transaction %s: %s", tx.Status, tx.Status)
+				return tx, fmt.Errorf("transaction %s: %s", transactionID, tx.Status)
 			}
 			// Otherwise keep waiting
 		}
