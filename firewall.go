@@ -70,22 +70,31 @@ func (f *FirewallService) Get(ctx context.Context, serverID ServerID) (*Firewall
 }
 
 // UpdateConfig updates the firewall configuration.
+// Nil pointers indicate unchanged fields (omitted from the request).
 type UpdateConfig struct {
-	Status       FirewallStatus
-	WhitelistHOS bool
-	FilterIPv6   bool
-	Rules        FirewallRules
+	Status       *FirewallStatus `json:"status,omitempty"`
+	WhitelistHOS *bool           `json:"whitelist_hos,omitempty"`
+	FilterIPv6   *bool           `json:"filter_ipv6,omitempty"`
+	Rules        FirewallRules   `json:"rules,omitempty"`
 }
 
 // Update updates the firewall configuration for a server.
+// Only non-nil fields in config are sent to the API.
 func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config UpdateConfig) (*FirewallConfig, error) {
 	path := fmt.Sprintf("/firewall/%s", serverID.String())
 
-	formData := f.encodeRules(config.Rules, map[string]string{
-		"status":        string(config.Status),
-		"whitelist_hos": strconv.FormatBool(config.WhitelistHOS),
-		"filter_ipv6":   strconv.FormatBool(config.FilterIPv6),
-	})
+	extra := make(map[string]string)
+	if config.Status != nil {
+		extra["status"] = string(*config.Status)
+	}
+	if config.WhitelistHOS != nil {
+		extra["whitelist_hos"] = strconv.FormatBool(*config.WhitelistHOS)
+	}
+	if config.FilterIPv6 != nil {
+		extra["filter_ipv6"] = strconv.FormatBool(*config.FilterIPv6)
+	}
+
+	formData := f.encodeRules(config.Rules, extra)
 
 	var result FirewallConfig
 	if err := f.client.PostRaw(ctx, path, formData, &result); err != nil {
@@ -157,10 +166,11 @@ func (f *FirewallService) Activate(ctx context.Context, serverID ServerID) (*Fir
 		return nil, err
 	}
 
+	status := FirewallStatusActive
 	updateConfig := UpdateConfig{
-		Status:       FirewallStatusActive,
-		WhitelistHOS: current.WhitelistHOS,
-		FilterIPv6:   current.FilterIPv6,
+		Status:       &status,
+		WhitelistHOS: &current.WhitelistHOS,
+		FilterIPv6:   &current.FilterIPv6,
 		Rules:        current.Rules,
 	}
 
@@ -183,10 +193,11 @@ func (f *FirewallService) Disable(ctx context.Context, serverID ServerID) (*Fire
 		return nil, err
 	}
 
+	status := FirewallStatusDisabled
 	updateConfig := UpdateConfig{
-		Status:       FirewallStatusDisabled,
-		WhitelistHOS: current.WhitelistHOS,
-		FilterIPv6:   current.FilterIPv6,
+		Status:       &status,
+		WhitelistHOS: &current.WhitelistHOS,
+		FilterIPv6:   &current.FilterIPv6,
 		Rules:        current.Rules,
 	}
 
