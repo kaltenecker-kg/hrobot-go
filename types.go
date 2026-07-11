@@ -395,17 +395,25 @@ func (p PortRange) String() string {
 
 // Server represents a Hetzner dedicated server.
 type Server struct {
-	ServerIP     net.IP       `json:"server_ip"`
-	ServerNumber int          `json:"server_number"`
-	ServerName   string       `json:"server_name"`
-	Product      string       `json:"product"`
-	DC           string       `json:"dc"`
-	Traffic      TrafficSize  `json:"traffic"`
-	Status       ServerStatus `json:"status"`
-	Cancelled    bool         `json:"cancelled"`
-	PaidUntil    string       `json:"paid_until"`
-	IP           []net.IP     `json:"ip"`
-	Subnet       []Subnet     `json:"subnet"`
+	ServerIP         net.IP       `json:"server_ip"`
+	ServerNumber     int          `json:"server_number"`
+	ServerName       string       `json:"server_name"`
+	Product          string       `json:"product"`
+	DC               string       `json:"dc"`
+	Traffic          TrafficSize  `json:"traffic"`
+	Status           ServerStatus `json:"status"`
+	Cancelled        bool         `json:"cancelled"`
+	PaidUntil        string       `json:"paid_until"`
+	IP               []net.IP     `json:"ip"`
+	IPv6Net          string       `json:"server_ipv6_net,omitempty"`
+	Subnet           []Subnet     `json:"subnet"`
+	Reset            bool         `json:"reset,omitempty"`
+	Rescue           bool         `json:"rescue,omitempty"`
+	VNC              bool         `json:"vnc,omitempty"`
+	Windows          bool         `json:"windows,omitempty"`
+	WOL              bool         `json:"wol,omitempty"`
+	HotSwap          bool         `json:"hot_swap,omitempty"`
+	LinkedStorageBox string       `json:"linked_storagebox,omitempty"`
 }
 
 // Subnet represents a network subnet.
