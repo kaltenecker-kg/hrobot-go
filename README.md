@@ -80,27 +80,31 @@ fmt.Printf("%d/%d remaining, resets at %s\n", rl.Remaining, rl.Limit, rl.Reset)
 | vSwitch     | Implemented | Virtual switch management                              |
 | Failover    | Implemented | Failover IP management                                 |
 | Traffic     | Implemented | Traffic query                                          |
-| Auction     | Implemented | Auction server listing                                 |
-| Ordering    | Implemented | Read-only; order placement disallowed by client policy |
 | WOL         | Implemented | Wake-on-LAN                                            |
 | Subnet      | Implemented | Subnet list/get/update, MAC, cancellation status       |
 | Storage Box | Implemented | Box, snapshots, snapshot plan, sub-accounts            |
 
 ### Disallowed-by-policy operations
 
-To prevent accidents, this client refuses to invoke endpoints that purchase or
+To prevent accidents, this client refuses to invoke endpoints that
 destructively cancel Hetzner resources. The methods are still part of the
 public API surface but short-circuit with an `*Error` of `Kind: Policy` and
 `Status: 451` before any HTTP request:
 
-- `OrderingService.PlaceMarketOrder`, `PlaceProductOrder`, `PlaceAddonOrder`
 - `ServerService.RequestCancellation`
 - `IPService.CancelIP`
 - `SubnetService.Cancel`
 
-Reads (lists, transactions, cancellation status) and recovery operations
+Reads (lists, cancellation status) and recovery operations
 (`WithdrawCancellation`) remain fully callable. Use the Hetzner Robot UI to
-purchase or cancel.
+cancel resources.
+
+### Unsupported endpoints
+
+Unlike the disallowed-by-policy methods above, these are not part of the client
+surface at all. Server auction, product ordering, and addon purchase endpoints
+are out of scope and not implemented. Use the Hetzner Robot UI to browse the
+server market or place orders.
 
 ## Authentication
 
