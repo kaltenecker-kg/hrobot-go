@@ -233,7 +233,7 @@ func IsUnauthorizedError(err error) bool {
 
 // IsFirewallRuleLimitExceededError reports whether err indicates the inbound
 // firewall rule limit was exceeded, whether the request was rejected locally
-// by this client (see FirewallRules.Validate) or by the Hetzner API. It
+// by this client (see Firewall.ValidateRules) or by the Hetzner API. It
 // matches on the error code regardless of kind, so both origins are caught.
 func IsFirewallRuleLimitExceededError(err error) bool {
 	var e *Error

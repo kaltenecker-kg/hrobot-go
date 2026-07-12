@@ -85,7 +85,7 @@ func validateInputRuleCount(rules FirewallRules, maxInput int) error {
 	if n := len(rules.Input); n > maxInput {
 		return NewValidationError(
 			ErrFirewallRuleLimitExceeded,
-			fmt.Sprintf("%d inbound firewall rules exceeds the maximum of %d", n, maxInput),
+			fmt.Sprintf("inbound firewall rule count %d exceeds the maximum of %d", n, maxInput),
 			http.StatusConflict,
 		)
 	}

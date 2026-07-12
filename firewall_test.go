@@ -1086,7 +1086,7 @@ func TestFirewallService_ValidateRules(t *testing.T) {
 
 			err := client.Firewall.ValidateRules(rules)
 			if tt.wantErr != (err != nil) {
-				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+				t.Fatalf("ValidateRules() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !tt.wantErr {
 				return
