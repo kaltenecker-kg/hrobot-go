@@ -315,8 +315,10 @@ all, even though the doc documents `ip[]`/`subnet[]` as the primary
 multi-value request shape (a single `ip=` is shown as one example among
 several). Added `TrafficGetParams.IPs []string` and `.Subnets []string`
 (alongside the existing single-value `IP` field, kept for
-backwards-compatible callers), encoded as literal `ip[]=`/`subnet[]=` form
-keys the same way `VSwitchService.AddServers` encodes `server[]=`.
+backwards-compatible callers and merged into `IPs` at encode time so only
+the `ip[]` key form is ever emitted), encoded as literal
+`ip[]=`/`subnet[]=` form keys the same way `VSwitchService.AddServers`
+encodes `server[]=`.
 
 ### key tag fixes
 
