@@ -24,8 +24,9 @@ drifts from the documented shape fails the test that uses it.
 
 ## Verification status
 
-Each tag is verified section-by-section against the canonical HTML doc
-(`.claude/CLAUDE.md` names this doc, not the web, as the reference to use).
+Each tag is verified section-by-section against the canonical Hetzner Robot
+webservice HTML doc (<https://robot.hetzner.com/doc/webservice/en.html>) — not
+against the web at large.
 Fixing a tag means: correcting wrong or missing fields, adding response
 envelopes/nullability the doc requires, and fixing schema bugs found along
 the way.
