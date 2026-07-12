@@ -4,7 +4,11 @@ on:
   pull_request:
     paths-ignore:
       - 'README.md'
+  # Only on main; pushes to a PR branch are already covered by the pull_request
+  # trigger, so restricting this avoids running every job twice per push.
   push:
+    branches:
+      - main
     paths-ignore:
       - 'README.md'
 
@@ -21,6 +25,10 @@ jobs:
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version-file: 'go.mod'
+          # go.mod pins the minimum (1.26); fetch the latest 1.26.x patch so CI
+          # picks up standard-library security fixes (e.g. the 1.26.5 crypto/tls
+          # fix) instead of a stale runner-preinstalled patch.
+          check-latest: true
           cache: true
       - run: go mod download
       - run: go build -v ./...
@@ -41,6 +49,10 @@ jobs:
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version-file: 'go.mod'
+          # go.mod pins the minimum (1.26); fetch the latest 1.26.x patch so CI
+          # picks up standard-library security fixes (e.g. the 1.26.5 crypto/tls
+          # fix) instead of a stale runner-preinstalled patch.
+          check-latest: true
           cache: true
       - run: go mod download
       - run: go test -v -race -cover -timeout=180s ./...
@@ -54,6 +66,10 @@ jobs:
       - uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
         with:
           go-version-file: 'go.mod'
+          # go.mod pins the minimum (1.26); fetch the latest 1.26.x patch so CI
+          # picks up standard-library security fixes (e.g. the 1.26.5 crypto/tls
+          # fix) instead of a stale runner-preinstalled patch.
+          check-latest: true
           cache: true
       - name: go mod tidy is clean
         run: go mod tidy -diff
