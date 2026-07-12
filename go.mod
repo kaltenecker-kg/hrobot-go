@@ -1,6 +1,6 @@
 module github.com/kaltenecker-kg/hrobot-go
 
-go 1.26.5
+go 1.26
 
 require github.com/getkin/kin-openapi v0.141.0
 
