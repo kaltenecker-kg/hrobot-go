@@ -1,3 +1,7 @@
+# Pinned deliberately for reproducibility; bump intentionally. The vulnerability
+# database is still fetched fresh at run time regardless of this version.
+GOVULNCHECK_VERSION := v1.6.0
+
 default: fmt lint vet test
 
 lint:
@@ -22,6 +26,6 @@ verify:
 
 # Scan for known vulnerabilities in dependencies and reachable code.
 vulncheck:
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 .PHONY: fmt lint vet test tidy-check verify vulncheck

@@ -60,4 +60,6 @@ jobs:
       - name: go mod verify
         run: go mod verify
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        # Pinned for reproducibility; the vulnerability database is still fetched
+        # fresh at run time. Bump intentionally.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
