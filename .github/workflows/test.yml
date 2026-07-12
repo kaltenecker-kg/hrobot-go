@@ -59,10 +59,18 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      # Reads .markdownlint-cli2.jsonc (rules + globs) with no glob input, so
-      # CI matches the local `pnpm lint:md` behavior.
-      - name: markdownlint
-        uses: DavidAnson/markdownlint-cli2-action@8de2aa07cae85fd17c0b35642db70cf5495f1d25 # v24.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          # markdownlint-cli2 requires Node >= 22 (see package.json engines).
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Runs the exact command from the local pre-commit hook, driven entirely
+      # by .markdownlint-cli2.jsonc (rules + globs), so CI and local stay in
+      # sync — including the docs/**/*.md glob.
+      - name: Lint markdown
+        run: pnpm lint:md
 
   quality:
     name: Module Quality
