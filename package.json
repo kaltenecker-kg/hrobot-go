@@ -1,12 +1,14 @@
 {
   "name": "hrobot-go-hooks",
   "private": true,
-  "description": "git-hook tooling for hrobot-go (husky only — not a node package)",
+  "description": "dev tooling for hrobot-go (git hooks + markdown lint — not a node package)",
   "scripts": {
-    "prepare": "husky"
+    "prepare": "husky",
+    "lint:md": "markdownlint-cli2"
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "markdownlint-cli2": "^0.23.0"
   },
   "packageManager": "pnpm@9.15.4"
 }

@@ -2,15 +2,11 @@ name: Tests
 
 on:
   pull_request:
-    paths-ignore:
-      - 'README.md'
   # Only on main; pushes to a PR branch are already covered by the pull_request
   # trigger, so restricting this avoids running every job twice per push.
   push:
     branches:
       - main
-    paths-ignore:
-      - 'README.md'
 
 permissions:
   contents: read
@@ -56,6 +52,17 @@ jobs:
           cache: true
       - run: go mod download
       - run: go test -v -race -cover -timeout=180s ./...
+
+  markdown:
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      # Reads .markdownlint-cli2.jsonc (rules + globs) with no glob input, so
+      # CI matches the local `pnpm lint:md` behavior.
+      - name: markdownlint
+        uses: DavidAnson/markdownlint-cli2-action@8de2aa07cae85fd17c0b35642db70cf5495f1d25 # v24.0.0
 
   quality:
     name: Module Quality
