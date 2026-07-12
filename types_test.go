@@ -13,6 +13,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 		input     string
 		wantBytes uint64
 		wantUnlim bool
+		wantRaw   string
 		wantErr   bool
 	}{
 		{
@@ -20,6 +21,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `"unlimited"`,
 			wantUnlim: true,
 			wantBytes: 0,
+			wantRaw:   "unlimited",
 			wantErr:   false,
 		},
 		{
@@ -27,6 +29,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `"5497558138880"`,
 			wantUnlim: false,
 			wantBytes: 5497558138880,
+			wantRaw:   "5497558138880",
 			wantErr:   false,
 		},
 		{
@@ -34,6 +37,7 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `"0"`,
 			wantUnlim: false,
 			wantBytes: 0,
+			wantRaw:   "0",
 			wantErr:   false,
 		},
 		{
@@ -41,6 +45,47 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			input:     `1099511627776`,
 			wantUnlim: false,
 			wantBytes: 1099511627776,
+			wantRaw:   "",
+			wantErr:   false,
+		},
+		{
+			name:      "5 TB",
+			input:     `"5 TB"`,
+			wantUnlim: false,
+			wantBytes: 5497558138880, // 5 * 1024^4
+			wantRaw:   "5 TB",
+			wantErr:   false,
+		},
+		{
+			name:      "2 TB",
+			input:     `"2 TB"`,
+			wantUnlim: false,
+			wantBytes: 2199023255552, // 2 * 1024^4
+			wantRaw:   "2 TB",
+			wantErr:   false,
+		},
+		{
+			name:      "20 TB",
+			input:     `"20 TB"`,
+			wantUnlim: false,
+			wantBytes: 21990232555520, // 20 * 1024^4
+			wantRaw:   "20 TB",
+			wantErr:   false,
+		},
+		{
+			name:      "null",
+			input:     `null`,
+			wantUnlim: false,
+			wantBytes: 0,
+			wantRaw:   "",
+			wantErr:   false,
+		},
+		{
+			name:      "garbage string",
+			input:     `"garbage"`,
+			wantUnlim: false,
+			wantBytes: 0,
+			wantRaw:   "garbage",
 			wantErr:   false,
 		},
 	}
@@ -61,7 +106,56 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			if ts.Bytes != tt.wantBytes {
 				t.Errorf("Bytes = %d, want %d", ts.Bytes, tt.wantBytes)
 			}
+			if ts.Raw != tt.wantRaw {
+				t.Errorf("Raw = %q, want %q", ts.Raw, tt.wantRaw)
+			}
 		})
+	}
+}
+
+func TestUnmarshalJSONResetsReusedReceiver(t *testing.T) {
+	var ts TrafficSize
+	if err := json.Unmarshal([]byte(`"5 TB"`), &ts); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &ts); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if ts.Unlimited || ts.Bytes != 0 || ts.Raw != "" {
+		t.Errorf("TrafficSize not reset on null: %+v", ts)
+	}
+
+	var bt BerlinTime
+	if err := json.Unmarshal([]byte(`"2024-01-01 12:00:00"`), &bt); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &bt); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if !bt.IsZero() {
+		t.Errorf("BerlinTime not reset on null: %v", bt)
+	}
+
+	var sf StringFloat
+	if err := json.Unmarshal([]byte(`"1.5"`), &sf); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &sf); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if sf != 0 {
+		t.Errorf("StringFloat not reset on null: %v", sf)
+	}
+
+	var id FlexibleID
+	if err := json.Unmarshal([]byte(`283693`), &id); err != nil {
+		t.Fatalf("first decode: %v", err)
+	}
+	if err := json.Unmarshal([]byte(`null`), &id); err != nil {
+		t.Fatalf("null decode: %v", err)
+	}
+	if id != "" {
+		t.Errorf("FlexibleID not reset on null: %q", id)
 	}
 }
 
@@ -127,6 +221,12 @@ func TestBerlinTimeUnmarshalJSON(t *testing.T) {
 			want:    "2025-10-24 00:00:00 +0200 CEST",
 			wantErr: false,
 		},
+		{
+			name:    "null",
+			input:   `null`,
+			want:    "0001-01-01 00:00:00 +0000 UTC",
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -186,6 +286,24 @@ func TestParsePortRange(t *testing.T) {
 		{
 			name:    "invalid range",
 			input:   "80-abc",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "inverted range",
+			input:   "443-80",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "out of range port",
+			input:   "65536",
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "out of range in range",
+			input:   "65535-65536",
 			want:    nil,
 			wantErr: true,
 		},
@@ -408,5 +526,67 @@ func TestBerlinTimeLocation(t *testing.T) {
 	expectedOffset := 2 * 3600 // 2 hours in seconds
 	if offset != expectedOffset {
 		t.Errorf("Berlin offset = %d, want %d (UTC+2)", offset, expectedOffset)
+	}
+}
+
+func TestStringFloatUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    float64
+		wantErr bool
+	}{
+		{
+			name:    "string float",
+			input:   `"123.4567"`,
+			want:    123.4567,
+			wantErr: false,
+		},
+		{
+			name:    "numeric float",
+			input:   `123.4567`,
+			want:    123.4567,
+			wantErr: false,
+		},
+		{
+			name:    "string zero",
+			input:   `"0"`,
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "numeric zero",
+			input:   `0`,
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "null",
+			input:   `null`,
+			want:    0,
+			wantErr: false,
+		},
+		{
+			name:    "empty string",
+			input:   `""`,
+			want:    0,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var sf StringFloat
+			err := json.Unmarshal([]byte(tt.input), &sf)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if float64(sf) != tt.want {
+				t.Errorf("StringFloat = %v, want %v", float64(sf), tt.want)
+			}
+		})
 	}
 }

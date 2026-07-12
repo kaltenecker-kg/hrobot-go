@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestRDNSService_List(t *testing.T) {
@@ -26,9 +28,10 @@ func TestRDNSService_List(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Check path and query string together
 				fullPath := r.URL.Path
 				if r.URL.RawQuery != "" {
@@ -60,7 +63,7 @@ func TestRDNSService_List(t *testing.T) {
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -107,9 +110,10 @@ func TestRDNSService_Get(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != tt.wantPath {
 					t.Errorf("expected path '%s', got '%s'", tt.wantPath, r.URL.Path)
 				}
@@ -127,7 +131,7 @@ func TestRDNSService_Get(t *testing.T) {
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -167,9 +171,10 @@ func TestRDNSService_Create(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// URL paths are not escaped by httptest, so compare without encoding
 				expectedPath := "/rdns/" + tt.ip
 				if r.URL.Path != expectedPath {
@@ -188,6 +193,8 @@ func TestRDNSService_Create(t *testing.T) {
 					t.Errorf("expected ptr '%s', got '%s'", tt.ptr, r.FormValue("ptr"))
 				}
 
+				// Doc: "the status code 201 CREATED is returned" for PUT.
+				w.WriteHeader(http.StatusCreated)
 				response := map[string]any{
 					"rdns": map[string]any{
 						"ip":  tt.ip,
@@ -197,7 +204,7 @@ func TestRDNSService_Create(t *testing.T) {
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -237,9 +244,10 @@ func TestRDNSService_Update(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// URL paths are not escaped by httptest, so compare without encoding
 				expectedPath := "/rdns/" + tt.ip
 				if r.URL.Path != expectedPath {
@@ -267,7 +275,7 @@ func TestRDNSService_Update(t *testing.T) {
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -304,9 +312,10 @@ func TestRDNSService_Delete(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// URL paths are not escaped by httptest, so compare without encoding
 				expectedPath := "/rdns/" + tt.ip
 				if r.URL.Path != expectedPath {
@@ -318,7 +327,7 @@ func TestRDNSService_Delete(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -385,9 +394,10 @@ func TestRDNSService_ErrorHandling(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"error": map[string]any{
@@ -396,7 +406,7 @@ func TestRDNSService_ErrorHandling(t *testing.T) {
 						"message": "test error",
 					},
 				})
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

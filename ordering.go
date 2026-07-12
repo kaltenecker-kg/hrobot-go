@@ -3,11 +3,14 @@ package hrobot
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"time"
 )
 
 // OrderingService provides access to server and addon ordering functions in the Hetzner Robot API.
+//
+// For browsing server market products, see [Client.Auction].
 type OrderingService struct {
 	client *Client
 }
@@ -47,21 +50,11 @@ type ProductPriceInfo struct {
 
 // ProductAddon represents an addon that can be purchased with a product server.
 type ProductAddon struct {
-	ID     string              `json:"id"`
-	Name   string              `json:"name"`
-	Min    uint32              `json:"min"`
-	Max    uint32              `json:"max"`
-	Prices []ProductAddonPrice `json:"price"`
-}
-
-// ProductAddonPrice represents the price for an addon in a specific location.
-type ProductAddonPrice struct {
-	Location        string  `json:"location"`
-	Price           float64 `json:"price"`
-	PriceSetup      float64 `json:"price_setup"`
-	PriceMonthly    float64 `json:"price_monthly"`
-	PriceMonthlyVAT float64 `json:"price_monthly_vat"`
-	PriceSetupVAT   float64 `json:"price_setup_vat"`
+	ID     string       `json:"id"`
+	Name   string       `json:"name"`
+	Min    uint32       `json:"min"`
+	Max    uint32       `json:"max"`
+	Prices []AddonPrice `json:"prices"`
 }
 
 // AuthorizationMethod specifies how to authorize access to a newly provisioned server.
@@ -128,30 +121,16 @@ type AddonOrder struct {
 	Test bool
 }
 
-// TransactionKey represents a key in a transaction response.
-type TransactionKey struct {
-	Key SSHKey `json:"key"`
-}
-
-// TransactionHostKey represents a host key in a transaction response.
-type TransactionHostKey struct {
-	Key struct {
-		Fingerprint string `json:"fingerprint"`
-		Type        string `json:"type"`
-		Size        int    `json:"size"`
-	} `json:"key"`
-}
-
 // Transaction represents a purchase transaction.
 type Transaction struct {
-	ID            string               `json:"id"`
-	Date          BerlinTime           `json:"date"`
-	Status        string               `json:"status"`
-	ServerNumber  *int                 `json:"server_number"`
-	ServerIP      *string              `json:"server_ip"`
-	AuthorizedKey []TransactionKey     `json:"authorized_key"`
-	HostKey       []TransactionHostKey `json:"host_key"`
-	Comment       *string              `json:"comment"`
+	ID            string     `json:"id"`
+	Date          BerlinTime `json:"date"`
+	Status        string     `json:"status"`
+	ServerNumber  *int       `json:"server_number"`
+	ServerIP      *string    `json:"server_ip"`
+	AuthorizedKey []BootKey  `json:"authorized_key"`
+	HostKey       []BootKey  `json:"host_key"`
+	Comment       *string    `json:"comment"`
 }
 
 // MarketTransaction represents a marketplace server purchase transaction.
@@ -169,22 +148,22 @@ type AddonTransaction struct {
 
 // PurchasedMarketProduct represents a server purchased from the market.
 type PurchasedMarketProduct struct {
-	ID           string   `json:"id"` // Can be numeric string or product name string
-	Name         string   `json:"name"`
-	Description  []string `json:"description"`
-	Traffic      string   `json:"traffic"`
-	Dist         string   `json:"dist"`
-	Arch         int      `json:"arch"`
-	Lang         string   `json:"lang"`
-	Location     *string  `json:"location"`
-	Datacenter   *string  `json:"datacenter"`
-	CPU          string   `json:"cpu"`
-	CPUBenchmark uint32   `json:"cpu_benchmark"`
-	MemorySize   float64  `json:"memory_size"`
-	HDDSize      float64  `json:"hdd_size"`
-	HDDText      string   `json:"hdd_text"`
-	HDDCount     uint8    `json:"hdd_count"`
-	NetworkSpeed *string  `json:"network_speed"`
+	ID           FlexibleID `json:"id"` // Numeric for market transactions (e.g. 283693), string like "EX40" for server transactions
+	Name         string     `json:"name"`
+	Description  []string   `json:"description"`
+	Traffic      string     `json:"traffic"`
+	Dist         string     `json:"dist"`
+	Arch         string     `json:"arch"` // Deprecated upstream; API sends it as a string (e.g. "64")
+	Lang         string     `json:"lang"`
+	Location     *string    `json:"location"`
+	Datacenter   *string    `json:"datacenter"`
+	CPU          string     `json:"cpu"`
+	CPUBenchmark uint32     `json:"cpu_benchmark"`
+	MemorySize   float64    `json:"memory_size"`
+	HDDSize      float64    `json:"hdd_size"`
+	HDDText      string     `json:"hdd_text"`
+	HDDCount     uint8      `json:"hdd_count"`
+	NetworkSpeed *string    `json:"network_speed"`
 }
 
 // PurchasedAddon represents an addon that was purchased.
@@ -237,7 +216,7 @@ func (o *OrderingService) PlaceAddonOrder(_ context.Context, _ AddonOrder) (*Add
 func (o *OrderingService) ListMarketTransactions(ctx context.Context) ([]MarketTransaction, error) {
 	path := "/order/server_market/transaction"
 	var result []MarketTransaction
-	if err := o.client.GetWrappedList(ctx, path, "server_market_transaction", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -265,7 +244,7 @@ func (o *OrderingService) GetMarketTransaction(ctx context.Context, transactionI
 func (o *OrderingService) ListAddonTransactions(ctx context.Context) ([]AddonTransaction, error) {
 	path := "/order/server_addon/transaction"
 	var result []AddonTransaction
-	if err := o.client.GetWrappedList(ctx, path, "server_addon_transaction", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -286,7 +265,14 @@ func (o *OrderingService) GetAddonTransaction(ctx context.Context, transactionID
 }
 
 // WaitForMarketTransactionCompletion polls the transaction status until it's completed or an error occurs.
+//
+// checkInterval controls the polling frequency; if it is zero or negative, it
+// defaults to 30 seconds.
 func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context, transactionID string, checkInterval time.Duration) (*MarketTransaction, error) {
+	if checkInterval <= 0 {
+		checkInterval = 30 * time.Second
+	}
+
 	ticker := time.NewTicker(checkInterval)
 	defer ticker.Stop()
 
@@ -296,13 +282,14 @@ func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context
 		return nil, err
 	}
 
-	fmt.Printf("[DEBUG] Transaction %s status: %s\n", transactionID, tx.Status)
+	o.client.logger.LogAttrs(ctx, slog.LevelDebug, "transaction status",
+		slog.String("id", transactionID), slog.String("status", tx.Status))
 
 	switch tx.Status {
 	case "ready":
 		return tx, nil
 	case "cancelled", "error":
-		return tx, fmt.Errorf("transaction %s: %s", tx.Status, tx.Status)
+		return tx, fmt.Errorf("transaction %s: %s", transactionID, tx.Status)
 	}
 
 	for {
@@ -315,74 +302,26 @@ func (o *OrderingService) WaitForMarketTransactionCompletion(ctx context.Context
 				return nil, err
 			}
 
-			fmt.Printf("[DEBUG] Transaction %s status: %s\n", transactionID, tx.Status)
+			o.client.logger.LogAttrs(ctx, slog.LevelDebug, "transaction status",
+				slog.String("id", transactionID), slog.String("status", tx.Status))
 
 			switch tx.Status {
 			case "ready":
 				return tx, nil
 			case "cancelled", "error":
-				return tx, fmt.Errorf("transaction %s: %s", tx.Status, tx.Status)
+				return tx, fmt.Errorf("transaction %s: %s", transactionID, tx.Status)
 			}
 			// Otherwise keep waiting
 		}
 	}
 }
 
-// MarketProduct represents a server available on the auction market.
-type MarketProduct struct {
-	ID            uint32   `json:"id"`
-	Name          string   `json:"name"`
-	Description   []string `json:"description"`
-	Traffic       string   `json:"traffic"`
-	Dist          []string `json:"dist"`
-	Arch          []int    `json:"arch"`
-	Lang          []string `json:"lang"`
-	CPU           string   `json:"cpu"`
-	CPUBenchmark  uint32   `json:"cpu_benchmark"`
-	CPUCount      int      `json:"cpu_count"`
-	MemorySize    float64  `json:"memory_size"`
-	HDDSize       float64  `json:"hdd_size"`
-	HDDText       string   `json:"hdd_text"`
-	HDDCount      uint8    `json:"hdd_count"`
-	Datacenter    string   `json:"datacenter"`
-	NetworkSpeed  string   `json:"network_speed"`
-	Price         string   `json:"price"`
-	PriceSetup    string   `json:"price_setup"`
-	PriceVAT      string   `json:"price_vat"`
-	PriceSetupVAT string   `json:"price_setup_vat"`
-}
-
 // AddonProduct represents an addon product available for order.
 type AddonProduct struct {
-	ID     string              `json:"id"`
-	Name   string              `json:"name"`
-	Min    uint32              `json:"min"`
-	Max    uint32              `json:"max"`
-	Prices []ProductAddonPrice `json:"prices"`
-}
-
-// ListMarketProducts retrieves all servers available on the auction market.
-//
-// GET /order/server_market/product.
-func (o *OrderingService) ListMarketProducts(ctx context.Context) ([]MarketProduct, error) {
-	path := "/order/server_market/product"
-	var result []MarketProduct
-	if err := o.client.GetWrappedList(ctx, path, "server_market_product", &result); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-// GetMarketProduct retrieves a specific auction market server by ID.
-//
-// GET /order/server_market/product/{id}.
-func (o *OrderingService) GetMarketProduct(ctx context.Context, productID uint32) (*MarketProduct, error) {
-	path := fmt.Sprintf("/order/server_market/product/%d", productID)
-	var result MarketProduct
-	if err := o.client.Get(ctx, path, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
+	ID    string     `json:"id"`
+	Name  string     `json:"name"`
+	Type  string     `json:"type"`
+	Price AddonPrice `json:"price"`
 }
 
 // ListTransactions lists standard server transaction history from the last 30 days.
@@ -391,7 +330,7 @@ func (o *OrderingService) GetMarketProduct(ctx context.Context, productID uint32
 func (o *OrderingService) ListTransactions(ctx context.Context) ([]MarketTransaction, error) {
 	path := "/order/server/transaction"
 	var result []MarketTransaction
-	if err := o.client.GetWrappedList(ctx, path, "transaction", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -411,11 +350,11 @@ func (o *OrderingService) GetTransaction(ctx context.Context, transactionID stri
 
 // ListAddonProducts retrieves all addon products available for a server.
 //
-// GET /order/server_addon/product.
+// GET /order/server_addon/{server-number}/product.
 func (o *OrderingService) ListAddonProducts(ctx context.Context, serverNumber int) ([]AddonProduct, error) {
-	path := fmt.Sprintf("/order/server_addon/product?server_number=%d", serverNumber)
+	path := fmt.Sprintf("/order/server_addon/%d/product", serverNumber)
 	var result []AddonProduct
-	if err := o.client.GetWrappedList(ctx, path, "server_addon_product", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -429,7 +368,7 @@ func (o *OrderingService) ListAddonProducts(ctx context.Context, serverNumber in
 func (o *OrderingService) ListProducts(ctx context.Context) ([]Product, error) {
 	path := "/order/server/product"
 	var result []Product
-	if err := o.client.GetWrappedList(ctx, path, "product", &result); err != nil {
+	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -441,7 +380,7 @@ func (o *OrderingService) ListProducts(ctx context.Context) ([]Product, error) {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-order-server-product-id
 func (o *OrderingService) GetProduct(ctx context.Context, productID string) (*Product, error) {
-	path := fmt.Sprintf("/order/server/product/%s", productID)
+	path := fmt.Sprintf("/order/server/product/%s", url.PathEscape(productID))
 	var result Product
 	if err := o.client.Get(ctx, path, &result); err != nil {
 		return nil, err
