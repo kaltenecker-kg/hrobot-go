@@ -32,8 +32,13 @@ func TestTrafficService_Get(t *testing.T) {
 		if got := r.FormValue("to"); got != "2019-01-07" {
 			t.Errorf("expected to '2019-01-07', got '%s'", got)
 		}
-		if got := r.FormValue("ip"); got != "123.123.123.123" {
-			t.Errorf("expected ip '123.123.123.123', got '%s'", got)
+		// The IP shorthand field is merged into the ip[] bracket keys.
+		gotIPs := r.Form["ip[]"]
+		if len(gotIPs) != 1 || gotIPs[0] != "123.123.123.123" {
+			t.Errorf("expected ip[] ['123.123.123.123'], got %v", gotIPs)
+		}
+		if _, ok := r.Form["ip"]; ok {
+			t.Errorf("expected scalar ip to be absent, got '%s'", r.FormValue("ip"))
 		}
 		if got := r.FormValue("single_values"); got != "true" {
 			t.Errorf("expected single_values 'true', got '%s'", got)
@@ -180,9 +185,12 @@ func TestTrafficService_Get_NoSingleValues(t *testing.T) {
 			t.Errorf("expected single_values to be absent, got '%s'", r.FormValue("single_values"))
 		}
 
-		// ip must NOT be set when empty
+		// neither ip key form may be set when no IPs were given
 		if _, ok := r.Form["ip"]; ok {
 			t.Errorf("expected ip to be absent, got '%s'", r.FormValue("ip"))
+		}
+		if _, ok := r.Form["ip[]"]; ok {
+			t.Errorf("expected ip[] to be absent, got %v", r.Form["ip[]"])
 		}
 
 		// Doc-verbatim response shape for "Query traffic data for one IP"
@@ -243,7 +251,8 @@ func TestTrafficService_Get_NoSingleValues(t *testing.T) {
 
 // TestTrafficService_Get_MultipleIPsAndSubnets exercises the doc's "Query
 // traffic data for multiple IPs" and "...for subnet" examples, which use
-// repeated ip[]/subnet[] form keys.
+// repeated ip[]/subnet[] form keys. It sets both the IP shorthand and IPs
+// to prove they are merged into a single set of ip[] keys.
 func TestTrafficService_Get_MultipleIPsAndSubnets(t *testing.T) {
 	spec := loadSpec(t)
 	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -254,6 +263,9 @@ func TestTrafficService_Get_MultipleIPsAndSubnets(t *testing.T) {
 		gotIPs := r.Form["ip[]"]
 		if len(gotIPs) != 2 || gotIPs[0] != "123.123.123.123" || gotIPs[1] != "124.124.124.124" {
 			t.Errorf("expected ip[] ['123.123.123.123', '124.124.124.124'], got %v", gotIPs)
+		}
+		if _, ok := r.Form["ip"]; ok {
+			t.Errorf("expected scalar ip to be absent, got '%s'", r.FormValue("ip"))
 		}
 		gotSubnets := r.Form["subnet[]"]
 		if len(gotSubnets) != 1 || gotSubnets[0] != "2a01:4f8:61:41a2::" {
@@ -294,7 +306,8 @@ func TestTrafficService_Get_MultipleIPsAndSubnets(t *testing.T) {
 		Type:    TrafficTypeMonth,
 		From:    "2010-09-01",
 		To:      "2010-09-31",
-		IPs:     []string{"123.123.123.123", "124.124.124.124"},
+		IP:      "123.123.123.123",
+		IPs:     []string{"124.124.124.124"},
 		Subnets: []string{"2a01:4f8:61:41a2::"},
 	})
 	if err != nil {

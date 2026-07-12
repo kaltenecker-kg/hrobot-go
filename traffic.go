@@ -56,9 +56,9 @@ type TrafficStats struct {
 //   - year: YYYY-MM (e.g., "2025-01")
 //
 // The doc documents "ip[]" and "subnet[]" as the request's IP/subnet
-// parameters (each accepting one or more values); IP and Subnet are
-// single-value convenience fields that are merged into IPs/Subnets when
-// set, so callers querying a single IP don't need to build a slice.
+// parameters (each accepting one or more values); IP is a single-value
+// convenience field that is merged into IPs when set, so callers querying
+// a single IP don't need to build a slice.
 type TrafficGetParams struct {
 	Type         TrafficType // Type of data (day, month, year)
 	From         string      // Start date (format depends on Type; see comments)
@@ -85,15 +85,17 @@ func (t *TrafficService) Get(ctx context.Context, params TrafficGetParams) (*Ser
 	formData.Set("type", string(params.Type))
 	formData.Set("from", params.From)
 	formData.Set("to", params.To)
-	if params.IP != "" {
-		formData.Set("ip", params.IP)
-	}
 	if params.SingleValues {
 		formData.Set("single_values", "true")
 	}
 
+	ips := params.IPs
+	if params.IP != "" {
+		ips = append([]string{params.IP}, params.IPs...)
+	}
+
 	body := formData.Encode()
-	body = appendBracketArray(body, "ip", params.IPs)
+	body = appendBracketArray(body, "ip", ips)
 	body = appendBracketArray(body, "subnet", params.Subnets)
 
 	// The shape of the "data" field depends on whether single_values was
