@@ -8,10 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
 func TestIPService_List(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/ip" {
 			t.Errorf("expected path '/ip', got '%s'", r.URL.Path)
 		}
@@ -19,32 +22,38 @@ func TestIPService_List(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := []map[string]any{
+		body := `[
 			{
-				"ip":               "123.123.123.123",
-				"server_ip":        "123.123.123.123",
-				"server_number":    321,
-				"locked":           false,
-				"traffic_warnings": true,
-				"traffic_hourly":   1000,
-				"traffic_daily":    50000,
-				"traffic_monthly":  1000000,
+				"ip": {
+					"ip": "123.123.123.123",
+					"server_ip": "123.123.123.123",
+					"server_number": 321,
+					"locked": false,
+					"separate_mac": null,
+					"traffic_warnings": false,
+					"traffic_hourly": 50,
+					"traffic_daily": 50,
+					"traffic_monthly": 8
+				}
 			},
 			{
-				"ip":               "124.124.124.124",
-				"server_ip":        "124.124.124.124",
-				"server_number":    456,
-				"locked":           false,
-				"traffic_warnings": false,
-				"traffic_hourly":   2000,
-				"traffic_daily":    60000,
-				"traffic_monthly":  1500000,
-			},
+				"ip": {
+					"ip": "124.124.124.124",
+					"server_ip": "123.123.123.123",
+					"server_number": 321,
+					"locked": false,
+					"separate_mac": null,
+					"traffic_warnings": false,
+					"traffic_hourly": 200,
+					"traffic_daily": 2000,
+					"traffic_monthly": 20
+				}
+			}
+		]`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
-		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -59,21 +68,38 @@ func TestIPService_List(t *testing.T) {
 		t.Errorf("expected 2 IPs, got %d", len(ips))
 	}
 
+	if ips[0].IP.String() != "123.123.123.123" {
+		t.Errorf("expected ip '123.123.123.123', got '%s'", ips[0].IP.String())
+	}
+
 	if ips[0].ServerNumber != 321 {
 		t.Errorf("expected server number 321, got %d", ips[0].ServerNumber)
 	}
 
-	if !ips[0].TrafficWarnings {
-		t.Error("expected traffic warnings to be enabled")
+	if ips[0].TrafficWarnings {
+		t.Error("expected traffic warnings to be disabled")
+	}
+
+	if ips[0].TrafficHourly != 50 || ips[0].TrafficDaily != 50 || ips[0].TrafficMonthly != 8 {
+		t.Errorf("unexpected traffic limits for ips[0]: %+v", ips[0])
+	}
+
+	if ips[1].IP.String() != "124.124.124.124" {
+		t.Errorf("expected ip '124.124.124.124', got '%s'", ips[1].IP.String())
 	}
 
 	if ips[1].TrafficWarnings {
 		t.Error("expected traffic warnings to be disabled")
 	}
+
+	if ips[1].TrafficHourly != 200 || ips[1].TrafficDaily != 2000 || ips[1].TrafficMonthly != 20 {
+		t.Errorf("unexpected traffic limits for ips[1]: %+v", ips[1])
+	}
 }
 
 func TestIPService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/ip/123.123.123.123" {
 			t.Errorf("expected path '/ip/123.123.123.123', got '%s'", r.URL.Path)
 		}
@@ -81,23 +107,26 @@ func TestIPService_Get(t *testing.T) {
 			t.Errorf("expected GET request, got '%s'", r.Method)
 		}
 
-		response := map[string]any{
-			"ip": map[string]any{
-				"ip":               "123.123.123.123",
-				"server_ip":        "123.123.123.123",
-				"server_number":    321,
-				"locked":           false,
-				"separate_mac":     "00:50:56:00:00:01",
-				"traffic_warnings": true,
-				"traffic_hourly":   1000,
-				"traffic_daily":    50000,
-				"traffic_monthly":  1000000,
-			},
+		body := `{
+			"ip": {
+				"ip": "123.123.123.123",
+				"gateway": "123.123.123.97",
+				"mask": 27,
+				"broadcast": "123.123.123.127",
+				"server_ip": "123.123.123.123",
+				"server_number": 321,
+				"locked": false,
+				"separate_mac": null,
+				"traffic_warnings": false,
+				"traffic_hourly": 50,
+				"traffic_daily": 50,
+				"traffic_monthly": 8
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
 		}
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			t.Fatalf("failed to encode response: %v", err)
-		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -109,16 +138,24 @@ func TestIPService_Get(t *testing.T) {
 		t.Fatalf("IP.Get returned error: %v", err)
 	}
 
+	if ipAddr.IP.String() != "123.123.123.123" {
+		t.Errorf("expected ip '123.123.123.123', got '%s'", ipAddr.IP.String())
+	}
+
 	if ipAddr.ServerNumber != 321 {
 		t.Errorf("expected server number 321, got %d", ipAddr.ServerNumber)
 	}
 
-	if ipAddr.SeparateMac != "00:50:56:00:00:01" {
-		t.Errorf("expected separate_mac '00:50:56:00:00:01', got '%s'", ipAddr.SeparateMac)
+	if ipAddr.SeparateMac != "" {
+		t.Errorf("expected separate_mac to be empty, got '%s'", ipAddr.SeparateMac)
 	}
 
-	if !ipAddr.TrafficWarnings {
-		t.Error("expected traffic warnings to be enabled")
+	if ipAddr.TrafficWarnings {
+		t.Error("expected traffic warnings to be disabled")
+	}
+
+	if ipAddr.TrafficHourly != 50 || ipAddr.TrafficDaily != 50 || ipAddr.TrafficMonthly != 8 {
+		t.Errorf("unexpected traffic limits: %+v", ipAddr)
 	}
 }
 
@@ -139,7 +176,8 @@ func TestIPService_SetTrafficWarnings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			spec := loadSpec(t)
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/ip/123.123.123.123" {
 					t.Errorf("expected path '/ip/123.123.123.123', got '%s'", r.URL.Path)
 				}
@@ -161,94 +199,107 @@ func TestIPService_SetTrafficWarnings(t *testing.T) {
 					t.Errorf("expected traffic_warnings '%s', got '%s'", expectedValue, r.FormValue("traffic_warnings"))
 				}
 
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer server.Close()
-
-			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
-			ctx := context.Background()
-
-			ip := net.ParseIP("123.123.123.123")
-			err := client.IP.SetTrafficWarnings(ctx, ip, tt.enabled)
-			if err != nil {
-				t.Fatalf("IP.SetTrafficWarnings returned error: %v", err)
-			}
-		})
-	}
-}
-
-func TestIPService_GetTraffic(t *testing.T) {
-	tests := []struct {
-		name        string
-		trafficType string
-		from        string
-		to          string
-		wantQuery   string
-	}{
-		{
-			name:        "daily traffic",
-			trafficType: "day",
-			from:        "2024-01-01",
-			to:          "2024-01-31",
-			wantQuery:   "from=2024-01-01&to=2024-01-31&type=day",
-		},
-		{
-			name:        "monthly traffic without dates",
-			trafficType: "month",
-			from:        "",
-			to:          "",
-			wantQuery:   "type=month",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/traffic/123.123.123.123" {
-					t.Errorf("expected path '/traffic/123.123.123.123', got '%s'", r.URL.Path)
-				}
-
-				if r.Method != "GET" {
-					t.Errorf("expected GET request, got '%s'", r.Method)
-				}
-
-				if r.URL.RawQuery != tt.wantQuery {
-					t.Errorf("expected query '%s', got '%s'", tt.wantQuery, r.URL.RawQuery)
-				}
-
+				// Doc-verbatim example response body for
+				// POST /ip/{ip} (traffic_warnings substituted per test case).
 				response := map[string]any{
-					"traffic": map[string]any{
-						"type": tt.trafficType,
-						"data": []map[string]any{
-							{
-								"timestamp": "2024-01-01 00:00:00",
-								"in":        1000000,
-								"out":       500000,
-							},
-						},
+					"ip": map[string]any{
+						"ip":               "123.123.123.123",
+						"gateway":          "123.123.123.97",
+						"mask":             27,
+						"broadcast":        "123.123.123.127",
+						"server_ip":        "123.123.123.123",
+						"server_number":    321,
+						"locked":           false,
+						"separate_mac":     nil,
+						"traffic_warnings": tt.enabled,
+						"traffic_hourly":   50,
+						"traffic_daily":    50,
+						"traffic_monthly":  8,
 					},
 				}
 				if err := json.NewEncoder(w).Encode(response); err != nil {
 					t.Fatalf("failed to encode response: %v", err)
 				}
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 			ctx := context.Background()
 
 			ip := net.ParseIP("123.123.123.123")
-			traffic, err := client.IP.GetTraffic(ctx, ip, tt.trafficType, tt.from, tt.to)
+			ipAddr, err := client.IP.SetTrafficWarnings(ctx, ip, tt.enabled)
 			if err != nil {
-				t.Fatalf("IP.GetTraffic returned error: %v", err)
+				t.Fatalf("IP.SetTrafficWarnings returned error: %v", err)
 			}
-
-			if traffic.Type != tt.trafficType {
-				t.Errorf("expected type '%s', got '%s'", tt.trafficType, traffic.Type)
+			if ipAddr.TrafficWarnings != tt.enabled {
+				t.Errorf("expected traffic_warnings %v, got %v", tt.enabled, ipAddr.TrafficWarnings)
 			}
+			if ipAddr.Gateway.String() != "123.123.123.97" {
+				t.Errorf("expected gateway '123.123.123.97', got '%s'", ipAddr.Gateway.String())
+			}
+		})
+	}
+}
 
-			if len(traffic.Data) != 1 {
-				t.Errorf("expected 1 data point, got %d", len(traffic.Data))
+func TestIPService_NilIPGuard(t *testing.T) {
+	client := NewClient("test-user", "test-pass")
+	ctx := context.Background()
+
+	tests := []struct {
+		name     string
+		testFunc func() error
+	}{
+		{
+			name: "Get with nil IP",
+			testFunc: func() error {
+				_, err := client.IP.Get(ctx, nil)
+				return err
+			},
+		},
+		{
+			name: "SetTrafficWarnings with nil IP",
+			testFunc: func() error {
+				_, err := client.IP.SetTrafficWarnings(ctx, nil, true)
+				return err
+			},
+		},
+		{
+			name: "WithdrawIPCancellation with nil IP",
+			testFunc: func() error {
+				return client.IP.WithdrawIPCancellation(ctx, nil)
+			},
+		},
+		{
+			name: "GetMAC with nil IP",
+			testFunc: func() error {
+				_, err := client.IP.GetMAC(ctx, nil)
+				return err
+			},
+		},
+		{
+			name: "SetMAC with nil IP",
+			testFunc: func() error {
+				_, err := client.IP.SetMAC(ctx, nil)
+				return err
+			},
+		},
+		{
+			name: "DeleteMAC with nil IP",
+			testFunc: func() error {
+				return client.IP.DeleteMAC(ctx, nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.testFunc()
+			if err == nil {
+				t.Errorf("expected error for nil IP, got nil")
+			}
+			var e *Error
+			if !errors.As(err, &e) || e.Kind != ErrKindParse {
+				t.Errorf("expected parse error, got %T: %v", err, err)
 			}
 		})
 	}
@@ -273,7 +324,8 @@ func TestIPService_CancelIP_DisallowedByPolicy(t *testing.T) {
 }
 
 func TestIPService_WithdrawIPCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/ip/123.123.123.123/cancellation" {
 			t.Errorf("expected path '/ip/123.123.123.123/cancellation', got '%s'", r.URL.Path)
 		}
@@ -282,8 +334,21 @@ func TestIPService_WithdrawIPCancellation(t *testing.T) {
 			t.Errorf("expected DELETE request, got '%s'", r.Method)
 		}
 
-		w.WriteHeader(http.StatusOK)
-	}))
+		// Doc-verbatim example response body for
+		// DELETE /ip/{ip}/cancellation.
+		response := map[string]any{
+			"cancellation": map[string]any{
+				"ip":                         "123.123.123.123",
+				"server_number":              321,
+				"earliest_cancellation_date": "2022-02-11",
+				"cancelled":                  false,
+				"cancellation_date":          nil,
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -324,7 +389,8 @@ func TestIPService_ErrorHandling(t *testing.T) {
 			statusCode: http.StatusUnauthorized,
 			setupFunc: func(c *Client, ctx context.Context) error {
 				ip := net.ParseIP("123.123.123.123")
-				return c.IP.SetTrafficWarnings(ctx, ip, true)
+				_, err := c.IP.SetTrafficWarnings(ctx, ip, true)
+				return err
 			},
 		},
 	}
@@ -355,7 +421,8 @@ func TestIPService_ErrorHandling(t *testing.T) {
 }
 
 func TestIPService_GetMAC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/ip/123.123.123.123/mac" {
 			t.Errorf("expected path '/ip/123.123.123.123/mac', got '%s'", r.URL.Path)
 		}
@@ -368,7 +435,7 @@ func TestIPService_GetMAC(t *testing.T) {
 				"mac": "00:21:85:62:3e:9c",
 			},
 		})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -382,7 +449,8 @@ func TestIPService_GetMAC(t *testing.T) {
 }
 
 func TestIPService_SetMAC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/ip/123.123.123.123/mac" {
 			t.Errorf("expected path '/ip/123.123.123.123/mac', got '%s'", r.URL.Path)
 		}
@@ -395,7 +463,7 @@ func TestIPService_SetMAC(t *testing.T) {
 				"mac": "00:21:85:62:3e:9c",
 			},
 		})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -409,15 +477,24 @@ func TestIPService_SetMAC(t *testing.T) {
 }
 
 func TestIPService_DeleteMAC(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/ip/123.123.123.123/mac" {
 			t.Errorf("expected path '/ip/123.123.123.123/mac', got '%s'", r.URL.Path)
 		}
 		if r.Method != "DELETE" {
 			t.Errorf("expected DELETE, got '%s'", r.Method)
 		}
-		w.WriteHeader(http.StatusOK)
-	}))
+		body := `{
+			"mac": {
+				"ip": "123.123.123.123",
+				"mac": null
+			}
+		}`
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

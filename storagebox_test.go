@@ -6,7 +6,28 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
+
+// storageBoxListFixture mirrors the abridged example from the doc's
+// GET /storagebox response, which omits the detail-only fields (disk
+// usage/webdav/samba/ssh/etc) that only appear on GET/POST /storagebox/{id}.
+func storageBoxListFixture() map[string]any {
+	return map[string]any{
+		"storagebox": map[string]any{
+			"id":            123456,
+			"login":         "u12345",
+			"name":          "Backup Server 1",
+			"product":       "BX60",
+			"cancelled":     false,
+			"locked":        false,
+			"location":      "FSN1",
+			"linked_server": 123456,
+			"paid_until":    "2015-10-23",
+		},
+	}
+}
 
 func storageBoxFixture() map[string]any {
 	return map[string]any{
@@ -36,15 +57,16 @@ func storageBoxFixture() map[string]any {
 }
 
 func TestStorageBoxService_List(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/storagebox" {
 			t.Errorf("expected '/storagebox', got '%s'", r.URL.Path)
 		}
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		_ = json.NewEncoder(w).Encode([]map[string]any{storageBoxFixture()})
-	}))
+		_ = json.NewEncoder(w).Encode([]map[string]any{storageBoxListFixture()})
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -58,12 +80,13 @@ func TestStorageBoxService_List(t *testing.T) {
 }
 
 func TestStorageBoxService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/storagebox/123456" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode(storageBoxFixture())
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -80,7 +103,8 @@ func TestStorageBoxService_Get(t *testing.T) {
 }
 
 func TestStorageBoxService_Update(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -104,7 +128,7 @@ func TestStorageBoxService_Update(t *testing.T) {
 			t.Errorf("webdav should be omitted")
 		}
 		_ = json.NewEncoder(w).Encode(storageBoxFixture())
-	}))
+	})))
 	defer server.Close()
 
 	name := "renamed"
@@ -125,7 +149,8 @@ func TestStorageBoxService_Update(t *testing.T) {
 }
 
 func TestStorageBoxService_ResetPassword_Generated(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -139,7 +164,7 @@ func TestStorageBoxService_ResetPassword_Generated(t *testing.T) {
 			t.Errorf("password should be omitted when empty")
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"password": "h1cgLgZYJsyGl0JK"})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -153,7 +178,8 @@ func TestStorageBoxService_ResetPassword_Generated(t *testing.T) {
 }
 
 func TestStorageBoxService_ResetPassword_Custom(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse: %v", err)
 		}
@@ -161,7 +187,7 @@ func TestStorageBoxService_ResetPassword_Custom(t *testing.T) {
 			t.Errorf("password: %q", r.FormValue("password"))
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"password": "TVUlzspV3YhfSJch"})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -188,12 +214,13 @@ func snapshotFixture() map[string]any {
 }
 
 func TestStorageBoxService_ListSnapshots(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/storagebox/123456/snapshot" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{snapshotFixture()})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -210,7 +237,8 @@ func TestStorageBoxService_ListSnapshots(t *testing.T) {
 }
 
 func TestStorageBoxService_CreateSnapshot(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -224,7 +252,7 @@ func TestStorageBoxService_CreateSnapshot(t *testing.T) {
 				"size":      400,
 			},
 		})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -238,7 +266,8 @@ func TestStorageBoxService_CreateSnapshot(t *testing.T) {
 }
 
 func TestStorageBoxService_DeleteSnapshot(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -246,7 +275,7 @@ func TestStorageBoxService_DeleteSnapshot(t *testing.T) {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -256,7 +285,8 @@ func TestStorageBoxService_DeleteSnapshot(t *testing.T) {
 }
 
 func TestStorageBoxService_RestoreSnapshot(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -270,7 +300,7 @@ func TestStorageBoxService_RestoreSnapshot(t *testing.T) {
 			t.Errorf("revert: %q", r.FormValue("revert"))
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -280,7 +310,8 @@ func TestStorageBoxService_RestoreSnapshot(t *testing.T) {
 }
 
 func TestStorageBoxService_SetSnapshotComment(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -294,7 +325,7 @@ func TestStorageBoxService_SetSnapshotComment(t *testing.T) {
 			t.Errorf("comment: %q", r.FormValue("comment"))
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -318,12 +349,13 @@ func snapshotPlanFixture() map[string]any {
 }
 
 func TestStorageBoxService_GetSnapshotPlan(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/storagebox/123456/snapshotplan" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{snapshotPlanFixture()})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -345,8 +377,9 @@ func TestStorageBoxService_GetSnapshotPlan(t *testing.T) {
 	}
 }
 
-func TestStorageBoxService_SetSnapshotPlan_ArrayResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func TestStorageBoxService_SetSnapshotPlan(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -379,7 +412,7 @@ func TestStorageBoxService_SetSnapshotPlan_ArrayResponse(t *testing.T) {
 			t.Errorf("month should be omitted")
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{snapshotPlanFixture()})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -398,25 +431,6 @@ func TestStorageBoxService_SetSnapshotPlan_ArrayResponse(t *testing.T) {
 	}
 	if plan.Status != "enabled" || plan.MaxSnapshots != 2 {
 		t.Errorf("unexpected: %+v", plan)
-	}
-}
-
-func TestStorageBoxService_SetSnapshotPlan_ObjectResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(snapshotPlanFixture())
-	}))
-	defer server.Close()
-
-	client := NewClient("u", "p", WithBaseURL(server.URL))
-	plan, err := client.StorageBox.SetSnapshotPlan(context.Background(), 123456, StorageBoxSnapshotPlan{
-		Status:       "disabled",
-		MaxSnapshots: 0,
-	})
-	if err != nil {
-		t.Fatalf("SetSnapshotPlan: %v", err)
-	}
-	if plan.Status != "enabled" {
-		t.Errorf("status: %q", plan.Status)
 	}
 }
 
@@ -439,12 +453,13 @@ func subAccountFixture() map[string]any {
 }
 
 func TestStorageBoxService_ListSubAccounts(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/storagebox/123456/subaccount" {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{subAccountFixture()})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -467,7 +482,8 @@ func TestStorageBoxService_ListSubAccounts(t *testing.T) {
 }
 
 func TestStorageBoxService_CreateSubAccount(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -508,7 +524,7 @@ func TestStorageBoxService_CreateSubAccount(t *testing.T) {
 				"homedirectory": "test",
 			},
 		})
-	}))
+	})))
 	defer server.Close()
 
 	hd := "test"
@@ -535,7 +551,8 @@ func TestStorageBoxService_CreateSubAccount(t *testing.T) {
 }
 
 func TestStorageBoxService_UpdateSubAccount(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "PUT" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -556,7 +573,7 @@ func TestStorageBoxService_UpdateSubAccount(t *testing.T) {
 			t.Errorf("samba should be omitted")
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	hd := "test2"
@@ -571,7 +588,8 @@ func TestStorageBoxService_UpdateSubAccount(t *testing.T) {
 }
 
 func TestStorageBoxService_DeleteSubAccount(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "DELETE" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -579,7 +597,7 @@ func TestStorageBoxService_DeleteSubAccount(t *testing.T) {
 			t.Errorf("path: %s", r.URL.Path)
 		}
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -589,7 +607,8 @@ func TestStorageBoxService_DeleteSubAccount(t *testing.T) {
 }
 
 func TestStorageBoxService_ResetSubAccountPassword_Generated(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			t.Errorf("method: %s", r.Method)
 		}
@@ -603,7 +622,7 @@ func TestStorageBoxService_ResetSubAccountPassword_Generated(t *testing.T) {
 			t.Errorf("password must be omitted when empty")
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"password": "h1cgLgZYJsyGl0JK"})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))
@@ -617,7 +636,8 @@ func TestStorageBoxService_ResetSubAccountPassword_Generated(t *testing.T) {
 }
 
 func TestStorageBoxService_ResetSubAccountPassword_Custom(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
 			t.Fatalf("parse: %v", err)
 		}
@@ -625,7 +645,7 @@ func TestStorageBoxService_ResetSubAccountPassword_Custom(t *testing.T) {
 			t.Errorf("password: %q", r.FormValue("password"))
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"password": "TVUlzspV3YhfSJch"})
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("u", "p", WithBaseURL(server.URL))

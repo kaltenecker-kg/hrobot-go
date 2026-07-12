@@ -24,8 +24,9 @@ type FirewallStatus string
 
 // Firewall status values reported by the API.
 const (
-	FirewallStatusActive   FirewallStatus = "active"
-	FirewallStatusDisabled FirewallStatus = "disabled"
+	FirewallStatusActive    FirewallStatus = "active"
+	FirewallStatusDisabled  FirewallStatus = "disabled"
+	FirewallStatusInProcess FirewallStatus = "in process"
 )
 
 // FirewallRule represents a single firewall rule.
@@ -70,22 +71,31 @@ func (f *FirewallService) Get(ctx context.Context, serverID ServerID) (*Firewall
 }
 
 // UpdateConfig updates the firewall configuration.
+// Nil pointers indicate unchanged fields (omitted from the request).
 type UpdateConfig struct {
-	Status       FirewallStatus
-	WhitelistHOS bool
-	FilterIPv6   bool
-	Rules        FirewallRules
+	Status       *FirewallStatus `json:"status,omitempty"`
+	WhitelistHOS *bool           `json:"whitelist_hos,omitempty"`
+	FilterIPv6   *bool           `json:"filter_ipv6,omitempty"`
+	Rules        FirewallRules   `json:"rules,omitempty"`
 }
 
 // Update updates the firewall configuration for a server.
+// Only non-nil fields in config are sent to the API.
 func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config UpdateConfig) (*FirewallConfig, error) {
 	path := fmt.Sprintf("/firewall/%s", serverID.String())
 
-	formData := f.encodeRules(config.Rules, map[string]string{
-		"status":        string(config.Status),
-		"whitelist_hos": strconv.FormatBool(config.WhitelistHOS),
-		"filter_ipv6":   strconv.FormatBool(config.FilterIPv6),
-	})
+	extra := make(map[string]string)
+	if config.Status != nil {
+		extra["status"] = string(*config.Status)
+	}
+	if config.WhitelistHOS != nil {
+		extra["whitelist_hos"] = strconv.FormatBool(*config.WhitelistHOS)
+	}
+	if config.FilterIPv6 != nil {
+		extra["filter_ipv6"] = strconv.FormatBool(*config.FilterIPv6)
+	}
+
+	formData := f.encodeRules(config.Rules, extra)
 
 	var result FirewallConfig
 	if err := f.client.PostRaw(ctx, path, formData, &result); err != nil {
@@ -142,35 +152,57 @@ func (f *FirewallService) encodeRule(rule FirewallRule) map[string]string {
 }
 
 // Activate activates the firewall for a server.
+//
+// POST /firewall/{server-id} applies a full firewall configuration, so
+// Activate re-posts the currently configured rules and whitelist_hos with
+// only the status flipped to "active" (a read-modify-write over Get and
+// Update). Posting status alone would replace the configuration with an
+// empty ruleset and lock the server out of inbound traffic.
+//
+// The API may respond with status FIREWALL_IN_PROCESS while the change is
+// applied; callers can use WaitForFirewallReady to wait for it to settle.
 func (f *FirewallService) Activate(ctx context.Context, serverID ServerID) (*FirewallConfig, error) {
-	path := fmt.Sprintf("/firewall/%s", serverID.String())
-
-	data := url.Values{}
-	data.Set("status", string(FirewallStatusActive))
-
-	var config FirewallConfig
-	err := f.client.Post(ctx, path, data, &config)
+	current, err := f.Get(ctx, serverID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	status := FirewallStatusActive
+	updateConfig := UpdateConfig{
+		Status:       &status,
+		WhitelistHOS: &current.WhitelistHOS,
+		FilterIPv6:   &current.FilterIPv6,
+		Rules:        current.Rules,
+	}
+
+	return f.Update(ctx, serverID, updateConfig)
 }
 
 // Disable disables the firewall for a server.
+//
+// POST /firewall/{server-id} applies a full firewall configuration, so
+// Disable re-posts the currently configured rules and whitelist_hos with
+// only the status flipped to "disabled" (a read-modify-write over Get and
+// Update). Posting status alone would replace the configuration with an
+// empty ruleset and lock the server out of inbound traffic.
+//
+// The API may respond with status FIREWALL_IN_PROCESS while the change is
+// applied; callers can use WaitForFirewallReady to wait for it to settle.
 func (f *FirewallService) Disable(ctx context.Context, serverID ServerID) (*FirewallConfig, error) {
-	path := fmt.Sprintf("/firewall/%s", serverID.String())
-
-	data := url.Values{}
-	data.Set("status", string(FirewallStatusDisabled))
-
-	var config FirewallConfig
-	err := f.client.Post(ctx, path, data, &config)
+	current, err := f.Get(ctx, serverID)
 	if err != nil {
 		return nil, err
 	}
 
-	return &config, nil
+	status := FirewallStatusDisabled
+	updateConfig := UpdateConfig{
+		Status:       &status,
+		WhitelistHOS: &current.WhitelistHOS,
+		FilterIPv6:   &current.FilterIPv6,
+		Rules:        current.Rules,
+	}
+
+	return f.Update(ctx, serverID, updateConfig)
 }
 
 // Delete removes all firewall rules (resets to empty configuration).
@@ -265,7 +297,7 @@ func (f *FirewallService) WaitForFirewallReady(ctx context.Context, serverID Ser
 			return false, err
 		}
 		// Check if status is not "in process"
-		return config.Status != "in process", nil
+		return config.Status != FirewallStatusInProcess, nil
 	})
 }
 

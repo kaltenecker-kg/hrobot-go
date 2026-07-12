@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +38,8 @@ const (
 	ProtocolICMP Protocol = "icmp"
 	ProtocolESP  Protocol = "esp"
 	ProtocolGRE  Protocol = "gre"
+	ProtocolIPIP Protocol = "ipip"
+	ProtocolAH   Protocol = "ah"
 )
 
 // ServerID represents a server identifier.
@@ -47,8 +50,15 @@ func (s ServerID) String() string {
 }
 
 // IPAddress represents an IP address with additional metadata.
+//
+// GET /ip (list) omits Gateway/Mask/Broadcast; GET /ip/{ip} and
+// POST /ip/{ip} (single-address responses) include them. All three are
+// therefore optional here so the same type can decode either shape.
 type IPAddress struct {
 	IP              net.IP `json:"ip"`
+	Gateway         net.IP `json:"gateway,omitempty"`
+	Mask            int    `json:"mask,omitempty"`
+	Broadcast       net.IP `json:"broadcast,omitempty"`
 	ServerIP        net.IP `json:"server_ip"`
 	ServerNumber    int    `json:"server_number"`
 	Locked          bool   `json:"locked"`
@@ -85,22 +95,67 @@ const (
 type TrafficSize struct {
 	Unlimited bool
 	Bytes     uint64
+	Raw       string
 }
 
-// UnmarshalJSON handles "unlimited" string and numeric values.
+// UnmarshalJSON handles "unlimited" string, human-readable strings like "5 TB", and numeric values.
 func (t *TrafficSize) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*t = TrafficSize{}
+	// Handle null
+	if string(data) == "null" {
+		return nil
+	}
+
 	var str string
 	if err := json.Unmarshal(data, &str); err == nil {
+		t.Raw = str // Always preserve the original wire value
+
+		// Handle "unlimited"
 		if str == "unlimited" {
 			t.Unlimited = true
 			return nil
 		}
-		// Try parsing as numeric string
-		bytes, err := strconv.ParseUint(str, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid traffic size: %s", str)
+
+		// Try parsing as human-readable format: number + unit (case-insensitive)
+		// Pattern: ^\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*$
+		pattern := regexp.MustCompile(`(?i)^\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*$`)
+		matches := pattern.FindStringSubmatch(str)
+		if len(matches) == 3 {
+			numStr := matches[1]
+			unit := strings.ToUpper(matches[2])
+
+			// Parse the numeric part
+			num, err := strconv.ParseFloat(numStr, 64)
+			if err == nil {
+				// Calculate multiplier based on unit
+				multiplier := uint64(1)
+				switch unit {
+				case "B":
+					multiplier = 1
+				case "KB":
+					multiplier = 1024
+				case "MB":
+					multiplier = 1024 * 1024
+				case "GB":
+					multiplier = 1024 * 1024 * 1024
+				case "TB":
+					multiplier = 1024 * 1024 * 1024 * 1024
+				}
+
+				t.Bytes = uint64(num * float64(multiplier))
+				return nil
+			}
 		}
-		t.Bytes = bytes
+
+		// Try parsing as pure-digit string (legacy behavior)
+		bytes, err := strconv.ParseUint(str, 10, 64)
+		if err == nil {
+			t.Bytes = bytes
+			return nil
+		}
+
+		// Unknown string - don't fail, just preserve Raw and leave Bytes = 0
 		return nil
 	}
 
@@ -113,17 +168,23 @@ func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// MarshalJSON encodes TrafficSize as the string "unlimited" or as a number
-// of bytes.
+// MarshalJSON encodes TrafficSize. If Raw is set, emit it as a JSON string;
+// otherwise encode as "unlimited" or as a number of bytes.
 func (t TrafficSize) MarshalJSON() ([]byte, error) {
+	if t.Raw != "" {
+		return json.Marshal(t.Raw)
+	}
 	if t.Unlimited {
 		return json.Marshal("unlimited")
 	}
 	return json.Marshal(t.Bytes)
 }
 
-// String returns "unlimited" or a human-readable byte count.
+// String returns the Raw value if set, otherwise "unlimited" or a human-readable byte count.
 func (t TrafficSize) String() string {
+	if t.Raw != "" {
+		return t.Raw
+	}
 	if t.Unlimited {
 		return "unlimited"
 	}
@@ -161,7 +222,15 @@ func init() {
 }
 
 // UnmarshalJSON parses timestamp and converts to Berlin time.
+// Treats JSON null as the zero time.Time value.
 func (bt *BerlinTime) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*bt = BerlinTime{}
+	// Handle null
+	if string(data) == "null" {
+		return nil
+	}
+
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
 		return err
@@ -194,11 +263,42 @@ func (bt BerlinTime) MarshalJSON() ([]byte, error) {
 	return json.Marshal(bt.In(berlinLocation).Format("2006-01-02 15:04:05"))
 }
 
+// FlexibleID decodes a JSON string or number into a string.
+type FlexibleID string
+
+// UnmarshalJSON handles both JSON string and JSON number encodings of an ID.
+func (f *FlexibleID) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*f = ""
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*f = FlexibleID(s)
+		return nil
+	}
+	var n json.Number
+	if err := json.Unmarshal(data, &n); err != nil {
+		return err
+	}
+	*f = FlexibleID(n.String())
+	return nil
+}
+
 // StringFloat represents a float that is encoded as a string in JSON.
 type StringFloat float64
 
-// UnmarshalJSON handles string-encoded floats.
+// UnmarshalJSON handles string-encoded floats and JSON null.
+// Treats JSON null (and empty string) as the zero value.
 func (sf *StringFloat) UnmarshalJSON(data []byte) error {
+	// Reset so reused receivers do not retain values from a prior decode.
+	*sf = 0
+	// Handle null
+	if string(data) == "null" {
+		return nil
+	}
+
 	var str string
 	if err := json.Unmarshal(data, &str); err != nil {
 		// Try as number directly
@@ -207,6 +307,11 @@ func (sf *StringFloat) UnmarshalJSON(data []byte) error {
 			return err
 		}
 		*sf = StringFloat(f)
+		return nil
+	}
+
+	// Handle empty string as zero value
+	if str == "" {
 		return nil
 	}
 
@@ -228,6 +333,21 @@ func (sf StringFloat) MarshalJSON() ([]byte, error) {
 // Float64 returns the underlying float64 value.
 func (sf StringFloat) Float64() float64 {
 	return float64(sf)
+}
+
+// PriceDetail holds one net/gross price pair; monthly and (where offered) hourly.
+type PriceDetail struct {
+	Net         StringFloat `json:"net"`
+	Gross       StringFloat `json:"gross"`
+	HourlyNet   StringFloat `json:"hourly_net"`
+	HourlyGross StringFloat `json:"hourly_gross"`
+}
+
+// AddonPrice is one location's pricing for an orderable addon.
+type AddonPrice struct {
+	Location   string      `json:"location"`
+	Price      PriceDetail `json:"price"`
+	PriceSetup PriceDetail `json:"price_setup"`
 }
 
 // PortRange represents a port or range of ports.
@@ -267,6 +387,9 @@ func ParsePortRange(s string) ([]PortRange, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid port end: %s", parts[1])
 		}
+		if start > end {
+			return nil, fmt.Errorf("inverted port range: %s-%s (start > end)", parts[0], parts[1])
+		}
 		return []PortRange{{Start: uint16(start), End: uint16(end)}}, nil
 	}
 
@@ -287,17 +410,25 @@ func (p PortRange) String() string {
 
 // Server represents a Hetzner dedicated server.
 type Server struct {
-	ServerIP     net.IP       `json:"server_ip"`
-	ServerNumber int          `json:"server_number"`
-	ServerName   string       `json:"server_name"`
-	Product      string       `json:"product"`
-	DC           string       `json:"dc"`
-	Traffic      TrafficSize  `json:"traffic"`
-	Status       ServerStatus `json:"status"`
-	Cancelled    bool         `json:"cancelled"`
-	PaidUntil    string       `json:"paid_until"`
-	IP           []net.IP     `json:"ip"`
-	Subnet       []Subnet     `json:"subnet"`
+	ServerIP         net.IP       `json:"server_ip"`
+	ServerNumber     int          `json:"server_number"`
+	ServerName       string       `json:"server_name"`
+	Product          string       `json:"product"`
+	DC               string       `json:"dc"`
+	Traffic          TrafficSize  `json:"traffic"`
+	Status           ServerStatus `json:"status"`
+	Cancelled        bool         `json:"cancelled"`
+	PaidUntil        string       `json:"paid_until"`
+	IP               []net.IP     `json:"ip"`
+	IPv6Net          string       `json:"server_ipv6_net,omitempty"`
+	Subnet           []Subnet     `json:"subnet"`
+	Reset            bool         `json:"reset,omitempty"`
+	Rescue           bool         `json:"rescue,omitempty"`
+	VNC              bool         `json:"vnc,omitempty"`
+	Windows          bool         `json:"windows,omitempty"`
+	WOL              bool         `json:"wol,omitempty"`
+	HotSwap          bool         `json:"hot_swap,omitempty"`
+	LinkedStorageBox string       `json:"linked_storagebox,omitempty"`
 }
 
 // Subnet represents a network subnet.

@@ -8,6 +8,13 @@ import (
 	"strings"
 )
 
+// VSwitchServer status constants.
+const (
+	VSwitchServerStatusReady      = "ready"
+	VSwitchServerStatusProcessing = "in process"
+	VSwitchServerStatusFailed     = "failed"
+)
+
 // VSwitchService provides access to vSwitch related functions in the Hetzner Robot API.
 type VSwitchService struct {
 	client *Client
@@ -42,7 +49,7 @@ type VSwitchServer struct {
 	ServerIP      string `json:"server_ip"`
 	ServerIPv6Net string `json:"server_ipv6_net"`
 	ServerNumber  int    `json:"server_number"`
-	Status        string `json:"status"` // "ready", "in process", "failed"
+	Status        string `json:"status"` // VSwitchServerStatusReady, VSwitchServerStatusProcessing ("in process"), or VSwitchServerStatusFailed
 }
 
 // VSwitchSubnet represents a subnet attached to a vSwitch.
@@ -159,9 +166,6 @@ func (v *VSwitchService) AddServers(ctx context.Context, id int, servers []strin
 //
 // DELETE /vswitch/{vswitch-id}/server
 //
-// Note: The API uses DELETE with a body, which is unusual.
-// We'll use PostRaw with the appropriate method.
-//
 // See: https://robot.hetzner.com/doc/webservice/en.html#delete-vswitch-vswitch-id-server
 func (v *VSwitchService) RemoveServers(ctx context.Context, id int, servers []string) error {
 	path := fmt.Sprintf("/vswitch/%d/server", id)
@@ -173,8 +177,8 @@ func (v *VSwitchService) RemoveServers(ctx context.Context, id int, servers []st
 	}
 	formData := strings.Join(formParts, "&")
 
-	// For now, use PostRaw - we may need to enhance the client to support DELETE with body
-	return v.client.PostRaw(ctx, path, formData, nil)
+	// Use DeleteRaw to avoid url.Values encoding the brackets
+	return v.client.DeleteRaw(ctx, path, formData, nil)
 }
 
 // WaitForVSwitchReady waits for a vSwitch to finish processing and become ready.
@@ -186,9 +190,12 @@ func (v *VSwitchService) WaitForVSwitchReady(ctx context.Context, id int) error 
 		if err != nil {
 			return false, err
 		}
-		// Check if all servers are in "ready" status (not "processing" or "failed")
+		// Check if all servers are in "ready" status (not "in process" or "failed")
 		for _, server := range vswitch.Servers {
-			if server.Status != "ready" {
+			if server.Status == VSwitchServerStatusFailed {
+				return false, fmt.Errorf("vswitch %d: server %d is in status failed", id, server.ServerNumber)
+			}
+			if server.Status != VSwitchServerStatusReady {
 				return false, nil
 			}
 		}

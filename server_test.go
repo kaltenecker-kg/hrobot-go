@@ -7,10 +7,24 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
 )
 
+// loadSpec loads the vendored OpenAPI spec once per test, failing the test
+// immediately if it cannot be loaded or fails validation.
+func loadSpec(t *testing.T) *spectest.Spec {
+	t.Helper()
+	spec, err := spectest.Load("spec/robot.yaml")
+	if err != nil {
+		t.Fatalf("failed to load spec/robot.yaml: %v", err)
+	}
+	return spec
+}
+
 func TestServerService_List(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/server" {
 			t.Errorf("expected path '/server', got '%s'", r.URL.Path)
 		}
@@ -41,7 +55,7 @@ func TestServerService_List(t *testing.T) {
 					"server_name":   "server2",
 					"product":       "AX41",
 					"dc":            "NBG1-DC3",
-					"traffic":       5368709120,
+					"traffic":       "5 TB",
 					"status":        "ready",
 					"cancelled":     false,
 					"paid_until":    "2024-11-30",
@@ -53,7 +67,7 @@ func TestServerService_List(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -87,10 +101,19 @@ func TestServerService_List(t *testing.T) {
 	if servers[1].ServerNumber != 456 {
 		t.Errorf("expected server number 456, got %d", servers[1].ServerNumber)
 	}
+
+	// Check the "5 TB" traffic parsing
+	if servers[1].Traffic.Bytes != 5497558138880 {
+		t.Errorf("expected traffic bytes 5497558138880 (5 TB), got %d", servers[1].Traffic.Bytes)
+	}
+	if servers[1].Traffic.Raw != "5 TB" {
+		t.Errorf("expected traffic Raw '5 TB', got '%s'", servers[1].Traffic.Raw)
+	}
 }
 
 func TestServerService_Get(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/server/321" {
 			t.Errorf("expected path '/server/321', got '%s'", r.URL.Path)
 		}
@@ -121,7 +144,7 @@ func TestServerService_Get(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -150,7 +173,8 @@ func TestServerService_Get(t *testing.T) {
 }
 
 func TestServerService_SetName(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/server/321" {
 			t.Errorf("expected path '/server/321', got '%s'", r.URL.Path)
 		}
@@ -184,7 +208,7 @@ func TestServerService_SetName(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			t.Fatalf("failed to encode response: %v", err)
 		}
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -222,7 +246,8 @@ func TestServerService_RequestCancellation_DisallowedByPolicy(t *testing.T) {
 }
 
 func TestServerService_WithdrawCancellation(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/server/321/cancellation" {
 			t.Errorf("expected path '/server/321/cancellation', got '%s'", r.URL.Path)
 		}
@@ -231,7 +256,7 @@ func TestServerService_WithdrawCancellation(t *testing.T) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-	}))
+	})))
 	defer server.Close()
 
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
@@ -266,9 +291,10 @@ func TestServerService_ErrorHandling(t *testing.T) {
 		},
 	}
 
+	spec := loadSpec(t)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(tt.statusCode)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"error": map[string]any{
@@ -277,7 +303,7 @@ func TestServerService_ErrorHandling(t *testing.T) {
 						"message": "test error",
 					},
 				})
-			}))
+			})))
 			defer server.Close()
 
 			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))

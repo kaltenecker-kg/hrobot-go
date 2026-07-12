@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // EncodeFirewallRules encodes firewall rules into Hetzner's hierarchical format
@@ -29,19 +30,7 @@ func EncodeFirewallRules(rules map[string][]map[string]string) string {
 		}
 	}
 
-	return joinParts(parts, "&")
-}
-
-// joinParts joins string parts with a separator.
-func joinParts(parts []string, sep string) string {
-	if len(parts) == 0 {
-		return ""
-	}
-	result := parts[0]
-	for i := 1; i < len(parts); i++ {
-		result += sep + parts[i]
-	}
-	return result
+	return strings.Join(parts, "&")
 }
 
 // FirewallRuleEncoder helps build firewall rules.
@@ -93,7 +82,7 @@ func (e *FirewallRuleEncoder) EncodeToString(additional map[string]string) strin
 		parts = append(parts, rulesStr)
 	}
 
-	return joinParts(parts, "&")
+	return strings.Join(parts, "&")
 }
 
 // RuleBuilder helps build individual firewall rules.

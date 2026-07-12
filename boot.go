@@ -26,32 +26,46 @@ type BootConfig struct {
 	CPanel  *CPanelConfig  `json:"cpanel,omitempty"`
 }
 
+// BootKey describes one SSH key attached to a rescue/linux activation.
+type BootKey struct {
+	Key BootKeyDetail `json:"key"`
+}
+
+// BootKeyDetail holds the metadata the API returns for an SSH key attached
+// to a rescue/linux activation.
+type BootKeyDetail struct {
+	Name        string `json:"name"`
+	Fingerprint string `json:"fingerprint"`
+	Type        string `json:"type"`
+	Size        int    `json:"size"`
+}
+
 // RescueConfig represents rescue system configuration.
 type RescueConfig struct {
-	ServerIP       string   `json:"server_ip"`
-	ServerIPv6Net  string   `json:"server_ipv6_net"`
-	ServerNumber   int      `json:"server_number"`
-	Active         bool     `json:"active"`
-	OS             any      `json:"os,omitempty"`   // string when active, []string when not
-	Arch           any      `json:"arch,omitempty"` // int when active, []int when not
-	AuthorizedKeys []string `json:"authorized_key,omitempty"`
-	HostKey        []string `json:"host_key,omitempty"`
-	Password       *string  `json:"password,omitempty"`
+	ServerIP       string    `json:"server_ip"`
+	ServerIPv6Net  string    `json:"server_ipv6_net"`
+	ServerNumber   int       `json:"server_number"`
+	Active         bool      `json:"active"`
+	OS             any       `json:"os,omitempty"`   // string when active, []string when not
+	Arch           any       `json:"arch,omitempty"` // int when active, []int when not
+	AuthorizedKeys []BootKey `json:"authorized_key,omitempty"`
+	HostKeys       []BootKey `json:"host_key,omitempty"`
+	Password       *string   `json:"password,omitempty"`
 }
 
 // LinuxConfig represents Linux installation configuration.
 type LinuxConfig struct {
-	ServerIP       string   `json:"server_ip"`
-	ServerIPv6Net  string   `json:"server_ipv6_net"`
-	ServerNumber   int      `json:"server_number"`
-	Dist           any      `json:"dist"` // string when active, []string when not
-	Arch           any      `json:"arch"` // int when active, []int when not
-	Lang           any      `json:"lang"` // string when active, []string when not
-	Active         bool     `json:"active"`
-	Hostname       string   `json:"hostname,omitempty"`
-	Password       *string  `json:"password,omitempty"`
-	AuthorizedKeys []string `json:"authorized_key,omitempty"`
-	HostKey        []string `json:"host_key,omitempty"`
+	ServerIP       string    `json:"server_ip"`
+	ServerIPv6Net  string    `json:"server_ipv6_net"`
+	ServerNumber   int       `json:"server_number"`
+	Dist           any       `json:"dist"` // string when active, []string when not
+	Arch           any       `json:"arch"` // int when active, []int when not
+	Lang           any       `json:"lang"` // string when active, []string when not
+	Active         bool      `json:"active"`
+	Hostname       string    `json:"hostname,omitempty"`
+	Password       *string   `json:"password,omitempty"`
+	AuthorizedKeys []BootKey `json:"authorized_key,omitempty"`
+	HostKeys       []BootKey `json:"host_key,omitempty"`
 }
 
 // VNCConfig represents VNC configuration.
@@ -234,16 +248,46 @@ func (b *BootService) Get(ctx context.Context, serverID ServerID) (*BootConfig, 
 	return &config, nil
 }
 
+// RescueActivateOpts are options for activating the rescue system.
+//
+// The doc's Input table for POST /boot/{server-number}/rescue lists os as
+// the only required field; authorized_key and keyboard are optional.
+type RescueActivateOpts struct {
+	// OS is the operating system to boot into, e.g. "linux" or "vkvm".
+	// Required.
+	OS string
+	// AuthorizedKeys are the fingerprints of one or more SSH keys already
+	// stored in Robot; the API does not accept full public keys here.
+	// Optional.
+	AuthorizedKeys []string
+	// Keyboard is the desired keyboard layout, e.g. "de". Optional;
+	// defaults to "us" on the API side when omitted.
+	Keyboard string
+	// Arch is deprecated upstream; omitted from the request when 0.
+	//
+	// Deprecated: the API ignores it and defaults to 64.
+	Arch int
+}
+
 // ActivateRescue activates the rescue system.
-func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, os string, arch int, authorizedKeys []string) (*RescueConfig, error) {
+func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, opts RescueActivateOpts) (*RescueConfig, error) {
+	if opts.OS == "" {
+		return nil, NewParseError("os is required", nil)
+	}
+
 	path := fmt.Sprintf("/boot/%s/rescue", serverID.String())
 
 	data := url.Values{}
-	data.Set("os", os)
-	data.Set("arch", fmt.Sprintf("%d", arch))
+	data.Set("os", opts.OS)
+	if opts.Arch != 0 {
+		data.Set("arch", fmt.Sprintf("%d", opts.Arch))
+	}
+	if opts.Keyboard != "" {
+		data.Set("keyboard", opts.Keyboard)
+	}
 
-	for _, key := range authorizedKeys {
-		data.Add("authorized_key[]", key)
+	for _, fingerprint := range opts.AuthorizedKeys {
+		data.Add("authorized_key[]", fingerprint)
 	}
 
 	var rescue RescueConfig
@@ -272,16 +316,44 @@ func (b *BootService) GetLastRescue(ctx context.Context, serverID ServerID) (*Re
 	return &rescue, nil
 }
 
+// LinuxActivateOpts are options for activating a Linux installation.
+//
+// The doc's Input table for POST /boot/{server-number}/linux lists dist and
+// lang as required; authorized_key is optional.
+type LinuxActivateOpts struct {
+	// Dist is the distribution to install, e.g. "Ubuntu 22.04". Required.
+	Dist string
+	// Lang is the installation language, e.g. "en". Required.
+	Lang string
+	// AuthorizedKeys are the fingerprints of one or more SSH keys already
+	// stored in Robot; the API does not accept full public keys here.
+	// Optional.
+	AuthorizedKeys []string
+	// Arch is deprecated upstream; omitted from the request when 0.
+	//
+	// Deprecated: the API ignores it and defaults to 64.
+	Arch int
+}
+
 // ActivateLinux activates Linux installation.
-func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, dist string, arch int, lang string, authorizedKeys []string) (*LinuxConfig, error) {
+func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, opts LinuxActivateOpts) (*LinuxConfig, error) {
+	if opts.Dist == "" {
+		return nil, NewParseError("dist is required", nil)
+	}
+	if opts.Lang == "" {
+		return nil, NewParseError("lang is required", nil)
+	}
+
 	path := fmt.Sprintf("/boot/%s/linux", serverID.String())
 
 	data := url.Values{}
-	data.Set("dist", dist)
-	data.Set("arch", fmt.Sprintf("%d", arch))
-	data.Set("lang", lang)
+	data.Set("dist", opts.Dist)
+	data.Set("lang", opts.Lang)
+	if opts.Arch != 0 {
+		data.Set("arch", fmt.Sprintf("%d", opts.Arch))
+	}
 
-	for _, key := range authorizedKeys {
+	for _, key := range opts.AuthorizedKeys {
 		data.Add("authorized_key[]", key)
 	}
 
@@ -300,14 +372,38 @@ func (b *BootService) DeactivateLinux(ctx context.Context, serverID ServerID) er
 	return b.client.Delete(ctx, path)
 }
 
+// VNCActivateOpts are options for activating a VNC installation.
+//
+// The doc's Input table for POST /boot/{server-number}/vnc lists dist and
+// lang as required.
+type VNCActivateOpts struct {
+	// Dist is the distribution to install, e.g. "Debian 12". Required.
+	Dist string
+	// Lang is the installation language, e.g. "en". Required.
+	Lang string
+	// Arch is deprecated upstream; omitted from the request when 0.
+	//
+	// Deprecated: the API ignores it and defaults to 64.
+	Arch int
+}
+
 // ActivateVNC activates VNC installation.
-func (b *BootService) ActivateVNC(ctx context.Context, serverID ServerID, dist string, arch int, lang string) (*VNCConfig, error) {
+func (b *BootService) ActivateVNC(ctx context.Context, serverID ServerID, opts VNCActivateOpts) (*VNCConfig, error) {
+	if opts.Dist == "" {
+		return nil, NewParseError("dist is required", nil)
+	}
+	if opts.Lang == "" {
+		return nil, NewParseError("lang is required", nil)
+	}
+
 	path := fmt.Sprintf("/boot/%s/vnc", serverID.String())
 
 	data := url.Values{}
-	data.Set("dist", dist)
-	data.Set("arch", fmt.Sprintf("%d", arch))
-	data.Set("lang", lang)
+	data.Set("dist", opts.Dist)
+	data.Set("lang", opts.Lang)
+	if opts.Arch != 0 {
+		data.Set("arch", fmt.Sprintf("%d", opts.Arch))
+	}
 
 	var vnc VNCConfig
 	err := b.client.Post(ctx, path, data, &vnc)
@@ -346,12 +442,15 @@ func (b *BootService) GetWindows(ctx context.Context, serverID ServerID) (*Windo
 	return &windows, nil
 }
 
-// ActivateWindows activates Windows installation.
-func (b *BootService) ActivateWindows(ctx context.Context, serverID ServerID, lang string) (*WindowsConfig, error) {
+// ActivateWindows activates Windows installation. os is the operating
+// system to install (e.g. "Windows Server 2019 Standard Edition"); the doc's
+// Input table for this endpoint lists both lang and os as required.
+func (b *BootService) ActivateWindows(ctx context.Context, serverID ServerID, lang string, os string) (*WindowsConfig, error) {
 	path := fmt.Sprintf("/boot/%s/windows", serverID.String())
 
 	data := url.Values{}
 	data.Set("lang", lang)
+	data.Set("os", os)
 
 	var windows WindowsConfig
 	err := b.client.Post(ctx, path, data, &windows)
