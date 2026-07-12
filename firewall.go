@@ -3,11 +3,18 @@ package hrobot
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 
 	"github.com/kaltenecker-kg/hrobot-go/internal/urlencode"
 )
+
+// MaxFirewallInputRules is the default maximum number of inbound (input)
+// firewall rules Hetzner accepts per server. Submitting more makes the API
+// respond with HTTP 409 and code FIREWALL_RULE_LIMIT_EXCEEDED. The ceiling
+// enforced by a client can be overridden with WithMaxFirewallInputRules.
+const MaxFirewallInputRules = 10
 
 // FirewallService handles firewall-related API operations.
 type FirewallService struct {
@@ -17,6 +24,18 @@ type FirewallService struct {
 // NewFirewallService creates a new firewall service.
 func NewFirewallService(client *Client) *FirewallService {
 	return &FirewallService{client: client}
+}
+
+// ValidateRules checks a ruleset against documented Hetzner constraints
+// without contacting the API. It currently enforces the inbound rule limit,
+// returning a validation error with code FIREWALL_RULE_LIMIT_EXCEEDED when the
+// number of input rules exceeds the client's configured ceiling (see
+// WithMaxFirewallInputRules; MaxFirewallInputRules by default). Update,
+// CreateTemplate, and UpdateTemplate run this check before posting, so callers
+// only need to invoke it directly to fail fast (for example when validating
+// user input up front).
+func (f *FirewallService) ValidateRules(rules FirewallRules) error {
+	return validateInputRuleCount(rules, f.client.maxFirewallInputRules)
 }
 
 // FirewallStatus represents the firewall status.
@@ -59,6 +78,20 @@ type FirewallRules struct {
 	Output []FirewallRule `json:"output"`
 }
 
+// validateInputRuleCount enforces the inbound rule limit, returning a
+// validation error with code FIREWALL_RULE_LIMIT_EXCEEDED when the number of
+// input rules exceeds maxInput.
+func validateInputRuleCount(rules FirewallRules, maxInput int) error {
+	if n := len(rules.Input); n > maxInput {
+		return NewValidationError(
+			ErrFirewallRuleLimitExceeded,
+			fmt.Sprintf("%d inbound firewall rules exceeds the maximum of %d", n, maxInput),
+			http.StatusConflict,
+		)
+	}
+	return nil
+}
+
 // Get retrieves the firewall configuration for a server.
 func (f *FirewallService) Get(ctx context.Context, serverID ServerID) (*FirewallConfig, error) {
 	var config FirewallConfig
@@ -82,6 +115,10 @@ type UpdateConfig struct {
 // Update updates the firewall configuration for a server.
 // Only non-nil fields in config are sent to the API.
 func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config UpdateConfig) (*FirewallConfig, error) {
+	if err := f.ValidateRules(config.Rules); err != nil {
+		return nil, err
+	}
+
 	path := fmt.Sprintf("/firewall/%s", serverID.String())
 
 	extra := make(map[string]string)
@@ -251,6 +288,10 @@ func (f *FirewallService) GetTemplate(ctx context.Context, templateID string) (*
 
 // CreateTemplate creates a new firewall template.
 func (f *FirewallService) CreateTemplate(ctx context.Context, config TemplateConfig) (*FirewallTemplate, error) {
+	if err := f.ValidateRules(config.Rules); err != nil {
+		return nil, err
+	}
+
 	formData := f.encodeRules(config.Rules, templateExtras(config))
 
 	var tmpl FirewallTemplate
@@ -262,6 +303,10 @@ func (f *FirewallService) CreateTemplate(ctx context.Context, config TemplateCon
 
 // UpdateTemplate updates an existing firewall template.
 func (f *FirewallService) UpdateTemplate(ctx context.Context, templateID string, config TemplateConfig) (*FirewallTemplate, error) {
+	if err := f.ValidateRules(config.Rules); err != nil {
+		return nil, err
+	}
+
 	path := fmt.Sprintf("/firewall/template/%s", templateID)
 
 	formData := f.encodeRules(config.Rules, templateExtras(config))

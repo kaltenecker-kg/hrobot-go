@@ -3,9 +3,11 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
@@ -1041,6 +1043,190 @@ func TestFirewallService_ApplyTemplate(t *testing.T) {
 	}
 	if config.ServerNumber != 321 {
 		t.Errorf("expected server number 321, got %d", config.ServerNumber)
+	}
+}
+
+// makeInputRules returns n distinct accept input rules for exercising the
+// inbound rule-limit validation.
+func makeInputRules(n int) []FirewallRule {
+	rules := make([]FirewallRule, n)
+	for i := range rules {
+		rules[i] = FirewallRule{
+			Name:      fmt.Sprintf("rule %d", i),
+			IPVersion: IPv4,
+			Action:    ActionAccept,
+			Protocol:  ProtocolTCP,
+			DestPort:  strconv.Itoa(1000 + i),
+		}
+	}
+	return rules
+}
+
+func TestFirewallService_ValidateRules(t *testing.T) {
+	client := NewClient("test-user", "test-pass")
+
+	tests := []struct {
+		name       string
+		inputRules int
+		wantErr    bool
+	}{
+		{name: "empty", inputRules: 0, wantErr: false},
+		{name: "at limit", inputRules: MaxFirewallInputRules, wantErr: false},
+		{name: "over limit", inputRules: MaxFirewallInputRules + 1, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Output rules are unbounded, so a large output set must not trip
+			// the input-only limit.
+			rules := FirewallRules{
+				Input:  makeInputRules(tt.inputRules),
+				Output: makeInputRules(MaxFirewallInputRules + 5),
+			}
+
+			err := client.Firewall.ValidateRules(rules)
+			if tt.wantErr != (err != nil) {
+				t.Fatalf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if !tt.wantErr {
+				return
+			}
+
+			if !IsFirewallRuleLimitExceededError(err) {
+				t.Errorf("expected IsFirewallRuleLimitExceededError to be true for %v", err)
+			}
+			var e *Error
+			if !errors.As(err, &e) {
+				t.Fatalf("expected *Error, got %T", err)
+			}
+			if e.Kind != ErrKindValidation {
+				t.Errorf("expected kind %q, got %q", ErrKindValidation, e.Kind)
+			}
+			if e.Status != http.StatusConflict {
+				t.Errorf("expected status %d, got %d", http.StatusConflict, e.Status)
+			}
+		})
+	}
+}
+
+func TestFirewallService_Update_InputRuleLimit(t *testing.T) {
+	// The over-limit config must be rejected locally, so the server handler
+	// must never be reached.
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("expected Update to reject over-limit rules before contacting the API")
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	status := FirewallStatusActive
+	_, err := client.Firewall.Update(ctx, ServerID(321), UpdateConfig{
+		Status: &status,
+		Rules:  FirewallRules{Input: makeInputRules(MaxFirewallInputRules + 1)},
+	})
+	if err == nil {
+		t.Fatal("expected Update to return an error for over-limit rules")
+	}
+	if !IsFirewallRuleLimitExceededError(err) {
+		t.Errorf("expected IsFirewallRuleLimitExceededError to be true for %v", err)
+	}
+}
+
+func TestWithMaxFirewallInputRules(t *testing.T) {
+	// A raised ceiling must let a config that exceeds the default limit reach
+	// the API instead of being rejected locally.
+	posted := false
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		posted = true
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST request, got '%s'", r.Method)
+		}
+		response := map[string]any{
+			"firewall": map[string]any{
+				"server_ip":     "123.123.123.123",
+				"server_number": 321,
+				"status":        "active",
+				"filter_ipv6":   false,
+				"whitelist_hos": true,
+				"port":          "main",
+				"rules": map[string]any{
+					"input":  []map[string]any{},
+					"output": []map[string]any{},
+				},
+			},
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
+	defer server.Close()
+
+	overDefault := MaxFirewallInputRules + 1
+	client := NewClient("test-user", "test-pass",
+		WithBaseURL(server.URL),
+		WithMaxFirewallInputRules(overDefault),
+	)
+	ctx := context.Background()
+
+	status := FirewallStatusActive
+	_, err := client.Firewall.Update(ctx, ServerID(321), UpdateConfig{
+		Status: &status,
+		Rules:  FirewallRules{Input: makeInputRules(overDefault)},
+	})
+	if err != nil {
+		t.Fatalf("Update returned error with raised ceiling: %v", err)
+	}
+	if !posted {
+		t.Error("expected Update to reach the API once the ceiling was raised")
+	}
+
+	// Non-positive overrides are ignored, so the default still applies.
+	def := NewClient("test-user", "test-pass", WithMaxFirewallInputRules(0))
+	if got := def.maxFirewallInputRules; got != MaxFirewallInputRules {
+		t.Errorf("expected non-positive override to be ignored (%d), got %d", MaxFirewallInputRules, got)
+	}
+}
+
+func TestFirewallService_Template_InputRuleLimit(t *testing.T) {
+	// Templates with more than MaxFirewallInputRules input rules can never be
+	// applied to a server, so Create/UpdateTemplate must reject them locally
+	// without reaching the API.
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+		t.Error("expected template methods to reject over-limit rules before contacting the API")
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	config := TemplateConfig{
+		Name:  "too-many-rules",
+		Rules: FirewallRules{Input: makeInputRules(MaxFirewallInputRules + 1)},
+	}
+
+	ops := map[string]func() error{
+		"CreateTemplate": func() error {
+			_, err := client.Firewall.CreateTemplate(ctx, config)
+			return err
+		},
+		"UpdateTemplate": func() error {
+			_, err := client.Firewall.UpdateTemplate(ctx, "7", config)
+			return err
+		},
+	}
+
+	for name, op := range ops {
+		t.Run(name, func(t *testing.T) {
+			err := op()
+			if err == nil {
+				t.Fatalf("expected %s to return an error for over-limit rules", name)
+			}
+			if !IsFirewallRuleLimitExceededError(err) {
+				t.Errorf("expected IsFirewallRuleLimitExceededError to be true for %v", err)
+			}
+		})
 	}
 }
 

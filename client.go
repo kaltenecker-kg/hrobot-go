@@ -37,6 +37,10 @@ type Client struct {
 	rateLimitMu sync.RWMutex
 	rateLimit   RateLimit
 
+	// maxFirewallInputRules is the ceiling enforced by the client-side
+	// firewall rule validation; see WithMaxFirewallInputRules.
+	maxFirewallInputRules int
+
 	// API Services
 	Server     *ServerService
 	Firewall   *FirewallService
@@ -102,13 +106,29 @@ func WithLogger(logger *slog.Logger) ClientOption {
 	}
 }
 
+// WithMaxFirewallInputRules overrides the ceiling used by the client-side
+// firewall inbound rule validation (default MaxFirewallInputRules). Raise it
+// if Hetzner increases the documented limit so a stale constant does not block
+// otherwise-valid configurations before a library release catches up; the API
+// remains the ultimate authority and still returns FIREWALL_RULE_LIMIT_EXCEEDED
+// if the config is genuinely over the server's limit. Values <= 0 are ignored
+// and the default is kept.
+func WithMaxFirewallInputRules(n int) ClientOption {
+	return func(c *Client) {
+		if n > 0 {
+			c.maxFirewallInputRules = n
+		}
+	}
+}
+
 // NewClient creates a new Hetzner Robot API client.
 func NewClient(username, password string, opts ...ClientOption) *Client {
 	c := &Client{
-		baseURL:   DefaultBaseURL,
-		username:  username,
-		password:  password,
-		userAgent: UserAgent,
+		baseURL:               DefaultBaseURL,
+		username:              username,
+		password:              password,
+		userAgent:             UserAgent,
+		maxFirewallInputRules: MaxFirewallInputRules,
 		httpClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
