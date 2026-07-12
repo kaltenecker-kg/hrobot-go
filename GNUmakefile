@@ -1,7 +1,3 @@
-# Pinned deliberately for reproducibility; bump intentionally. The vulnerability
-# database is still fetched fresh at run time regardless of this version.
-GOVULNCHECK_VERSION := v1.6.0
-
 default: fmt lint vet test
 
 lint:
@@ -25,7 +21,8 @@ verify:
 	go mod verify
 
 # Scan for known vulnerabilities in dependencies and reachable code.
+# govulncheck is pinned by commit SHA for reproducibility; Renovate bumps it.
 vulncheck:
-	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+	go run golang.org/x/vuln/cmd/govulncheck@19b0bb6a272792b9afa8a6983c3e9b9a1816947f ./... # v1.6.0
 
 .PHONY: fmt lint vet test tidy-check verify vulncheck
