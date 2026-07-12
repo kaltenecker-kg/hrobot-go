@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+IMPROVEMENTS:
+
+- **client**: Add `WithApplication(name, version)` to identify the program built on hrobot-go in the User-Agent,
+  composed as `<name>/<version> hrobot-go/<Version>`, matching hcloud-go's option
+- **client**: Add an exported `Version` constant and derive the default `UserAgent` from it (previously a hardcoded
+  string literal that had gone stale)
+- **client**: Add `WithEndpoint` as an alias for `WithBaseURL`, matching hcloud-go's option name
+- **client**: Validate credentials before the first request — reject an empty username/password or a username
+  containing a colon (RFC 7617), returning an `UNAUTHORIZED` validation error. `IsUnauthorizedError` now also matches
+  this local rejection
+
 ## 1.1.0 (2026-07-12)
 
 IMPROVEMENTS:

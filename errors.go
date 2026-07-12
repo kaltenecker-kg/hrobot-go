@@ -226,9 +226,16 @@ func IsFirewallInProcessError(err error) bool {
 	return IsAPIError(err, ErrFirewallInProcess)
 }
 
-// IsUnauthorizedError checks if the error is an unauthorized error.
+// IsUnauthorizedError reports whether err indicates an unauthorized request,
+// whether returned by the Hetzner API or rejected locally by this client for
+// missing/invalid credentials (see validateCredentials). It matches on the
+// error code regardless of kind, so both origins are caught.
 func IsUnauthorizedError(err error) bool {
-	return IsAPIError(err, ErrUnauthorized)
+	var e *Error
+	if !errors.As(err, &e) {
+		return false
+	}
+	return e.Code == ErrUnauthorized
 }
 
 // IsFirewallRuleLimitExceededError reports whether err indicates the inbound

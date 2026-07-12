@@ -154,6 +154,44 @@ func TestClientOptions(t *testing.T) {
 		}
 	})
 
+	t.Run("WithApplication name and version", func(t *testing.T) {
+		client := NewClient("user", "pass", WithApplication("my-app", "2.3.4"))
+		want := "my-app/2.3.4 " + UserAgent
+		if client.userAgent != want {
+			t.Errorf("userAgent = %s, want %s", client.userAgent, want)
+		}
+	})
+
+	t.Run("WithApplication name only", func(t *testing.T) {
+		client := NewClient("user", "pass", WithApplication("my-app", ""))
+		want := "my-app " + UserAgent
+		if client.userAgent != want {
+			t.Errorf("userAgent = %s, want %s", client.userAgent, want)
+		}
+	})
+
+	t.Run("WithApplication empty name is ignored", func(t *testing.T) {
+		client := NewClient("user", "pass", WithApplication("", "2.3.4"))
+		if client.userAgent != UserAgent {
+			t.Errorf("userAgent = %s, want default %s", client.userAgent, UserAgent)
+		}
+	})
+
+	t.Run("WithEndpoint aliases WithBaseURL", func(t *testing.T) {
+		client := NewClient("user", "pass", WithEndpoint("https://custom.example.com/"))
+		expected := "https://custom.example.com"
+		if client.baseURL != expected {
+			t.Errorf("baseURL = %s, want %s", client.baseURL, expected)
+		}
+	})
+
+	t.Run("UserAgent derives from Version", func(t *testing.T) {
+		want := "hrobot-go/" + Version
+		if UserAgent != want {
+			t.Errorf("UserAgent = %s, want %s", UserAgent, want)
+		}
+	})
+
 	t.Run("default values", func(t *testing.T) {
 		client := NewClient("user", "pass")
 		if client.baseURL != DefaultBaseURL {
@@ -197,6 +235,57 @@ func TestClientOptions(t *testing.T) {
 		}
 		if client.username != "user" {
 			t.Errorf("username = %s, want user", client.username)
+		}
+	})
+}
+
+func TestCredentialValidation(t *testing.T) {
+	cases := []struct {
+		name, user, pass string
+	}{
+		{"empty username", "", "pass"},
+		{"empty password", "user", ""},
+		{"both empty", "", ""},
+		{"colon in username", "us:er", "pass"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var hits atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				hits.Add(1)
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			client := NewClient(tc.user, tc.pass, WithBaseURL(server.URL))
+			err := client.Get(context.Background(), "/server", nil)
+			if err == nil {
+				t.Fatal("expected an error, got nil")
+			}
+			if !IsUnauthorizedError(err) {
+				t.Errorf("IsUnauthorizedError = false, want true (err: %v)", err)
+			}
+			// The request must be rejected locally, before any HTTP call.
+			if n := hits.Load(); n != 0 {
+				t.Errorf("server received %d requests, want 0", n)
+			}
+		})
+	}
+
+	t.Run("valid credentials pass validation", func(t *testing.T) {
+		var hits atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			hits.Add(1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+		if err := client.Get(context.Background(), "/server", nil); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if n := hits.Load(); n != 1 {
+			t.Errorf("server received %d requests, want 1", n)
 		}
 	})
 }

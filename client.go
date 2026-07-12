@@ -21,8 +21,11 @@ const (
 	DefaultBaseURL = "https://robot-ws.your-server.de"
 	// DefaultTimeout is the per-request HTTP timeout.
 	DefaultTimeout = 30 * time.Second
+	// Version is the hrobot-go library version, reported in the default
+	// User-Agent. Bump it in the release commit.
+	Version = "1.2.0"
 	// UserAgent is the default User-Agent header value.
-	UserAgent = "hrobot-go/1.0.0"
+	UserAgent = "hrobot-go/" + Version
 )
 
 // Client is the main API client for Hetzner Robot.
@@ -78,6 +81,12 @@ func WithBaseURL(url string) ClientOption {
 	}
 }
 
+// WithEndpoint sets a custom API endpoint URL. It is an alias for WithBaseURL,
+// named to match hcloud-go's option for familiarity.
+func WithEndpoint(endpoint string) ClientOption {
+	return WithBaseURL(endpoint)
+}
+
 // WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(httpClient *http.Client) ClientOption {
 	return func(c *Client) {
@@ -89,6 +98,25 @@ func WithHTTPClient(httpClient *http.Client) ClientOption {
 func WithUserAgent(ua string) ClientOption {
 	return func(c *Client) {
 		c.userAgent = ua
+	}
+}
+
+// WithApplication sets the application name and version identifying the program
+// built on top of hrobot-go. They are prefixed onto the default User-Agent as
+// "<name>/<version> hrobot-go/<Version>" (or "<name> hrobot-go/<Version>" when
+// version is empty), matching hcloud-go's WithApplication. An empty name is
+// ignored. For full control over the header use WithUserAgent instead;
+// whichever of the two is applied last wins.
+func WithApplication(name, version string) ClientOption {
+	return func(c *Client) {
+		if name == "" {
+			return
+		}
+		if version != "" {
+			c.userAgent = fmt.Sprintf("%s/%s %s", name, version, UserAgent)
+		} else {
+			c.userAgent = fmt.Sprintf("%s %s", name, UserAgent)
+		}
 	}
 }
 
@@ -310,6 +338,22 @@ func shouldRetry(method string, statusCode, attempt int) bool {
 	return false
 }
 
+// validateCredentials rejects credentials that cannot form a valid HTTP Basic
+// authorization header, before any request is sent — mirroring hcloud-go's
+// early token check. Both values are required, and the username may not contain
+// a colon (RFC 7617 reserves it as the user-id/password separator). All other
+// bytes are base64-encoded by net/http and so cannot corrupt the header; they
+// are left for the API to reject.
+func validateCredentials(username, password string) error {
+	if username == "" || password == "" {
+		return NewValidationError(ErrUnauthorized, "missing credentials: username and password are required", http.StatusUnauthorized)
+	}
+	if strings.ContainsRune(username, ':') {
+		return NewValidationError(ErrUnauthorized, "invalid username: must not contain a colon (RFC 7617)", http.StatusUnauthorized)
+	}
+	return nil
+}
+
 // doRequest executes an HTTP request with authentication and automatic
 // retry for transient errors. POST requests are never retried on 5xx
 // responses or transport errors (including timeouts), since the server may
@@ -317,6 +361,10 @@ func shouldRetry(method string, statusCode, attempt int) bool {
 // idempotent; 429 and a single 401 retry remain safe for POST because the
 // API did not execute the request in those cases.
 func (c *Client) doRequest(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
+	if err := validateCredentials(c.username, c.password); err != nil {
+		return nil, err
+	}
+
 	reqURL := c.baseURL + path
 
 	// Always read body bytes to support retries (body reader can only be read once)
