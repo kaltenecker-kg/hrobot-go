@@ -44,8 +44,6 @@ type Client struct {
 	Boot       *BootService
 	IP         *IPService
 	Key        *KeyService
-	Auction    *AuctionService
-	Ordering   *OrderingService
 	VSwitch    *VSwitchService
 	RDNS       *RDNSService
 	Failover   *FailoverService
@@ -130,8 +128,6 @@ func NewClient(username, password string, opts ...ClientOption) *Client {
 	c.Boot = NewBootService(c)
 	c.IP = NewIPService(c)
 	c.Key = NewKeyService(c)
-	c.Auction = NewAuctionService(c)
-	c.Ordering = NewOrderingService(c)
 	c.VSwitch = NewVSwitchService(c)
 	c.RDNS = NewRDNSService(c)
 	c.Failover = NewFailoverService(c)

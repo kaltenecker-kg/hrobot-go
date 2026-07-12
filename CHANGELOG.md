@@ -9,6 +9,8 @@ BREAKING CHANGES:
 - **restructure**: Module path changed to `github.com/kaltenecker-kg/hrobot-go`
 - **restructure**: CLI tool and Terraform provider removed; this package is now a library only
 - **restructure**: API client code moved from `pkg/hrobot/` to repository root
+- **scope**: Remove `AuctionService` and `OrderingService` (and the `Client.Auction`/`Client.Ordering` fields);
+  server auction, product ordering, and addon purchase endpoints are out of scope for this client
 - **client**: `WithDebug(bool)` replaced by `WithLogger(*slog.Logger)`; debug output is now structured `slog`
   events at DEBUG level instead of `fmt.Printf` traces
 - **errors**: API error code is now a typed `Code` field on `*Error` (no longer embedded in the message string).
@@ -22,7 +24,6 @@ FEATURES:
 - **subnet**: Add stub SubnetService for subnet management API
 - **storagebox**: Add stub StorageBoxService for storage box API
 - **boot**: Add GetLastLinux, GetWindows, ActivateWindows, DeactivateWindows methods
-- **ordering**: Add ListMarketProducts, GetMarketProduct, ListTransactions, GetTransaction, ListAddonProducts methods
 - **client**: Track rate limits — parses `RateLimit-Limit/Remaining/Reset` response headers and exposes
   `Client.LastRateLimit()`
 - **client**: Retry on `429 Too Many Requests` honoring the `Retry-After` header
