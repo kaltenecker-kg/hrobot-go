@@ -99,8 +99,12 @@ Reads (lists, cancellation status) and recovery operations
 (`WithdrawCancellation`) remain fully callable. Use the Hetzner Robot UI to
 cancel resources.
 
-Server auction, product ordering, and addon purchase endpoints are out of
-scope and not implemented by this client.
+### Unsupported endpoints
+
+Unlike the disallowed-by-policy methods above, these are not part of the client
+surface at all. Server auction, product ordering, and addon purchase endpoints
+are out of scope and not implemented. Use the Hetzner Robot UI to browse the
+server market or place orders.
 
 ## Authentication
 
