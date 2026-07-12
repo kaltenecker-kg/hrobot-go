@@ -86,7 +86,7 @@ fmt.Printf("%d/%d remaining, resets at %s\n", rl.Remaining, rl.Limit, rl.Reset)
 
 ### Disallowed-by-policy operations
 
-To prevent accidents, this client refuses to invoke endpoints that purchase or
+To prevent accidents, this client refuses to invoke endpoints that
 destructively cancel Hetzner resources. The methods are still part of the
 public API surface but short-circuit with an `*Error` of `Kind: Policy` and
 `Status: 451` before any HTTP request:
@@ -98,6 +98,9 @@ public API surface but short-circuit with an `*Error` of `Kind: Policy` and
 Reads (lists, cancellation status) and recovery operations
 (`WithdrawCancellation`) remain fully callable. Use the Hetzner Robot UI to
 cancel resources.
+
+Server auction, product ordering, and addon purchase endpoints are out of
+scope and not implemented by this client.
 
 ## Authentication
 
