@@ -39,11 +39,12 @@ type ErrorKind string
 
 // ErrorKind values categorize errors returned by this library.
 const (
-	ErrKindAPI     ErrorKind = "API"
-	ErrKindNetwork ErrorKind = "Network"
-	ErrKindParse   ErrorKind = "Parse"
-	ErrKindAuth    ErrorKind = "Auth"
-	ErrKindPolicy  ErrorKind = "Policy"
+	ErrKindAPI        ErrorKind = "API"
+	ErrKindNetwork    ErrorKind = "Network"
+	ErrKindParse      ErrorKind = "Parse"
+	ErrKindAuth       ErrorKind = "Auth"
+	ErrKindPolicy     ErrorKind = "Policy"
+	ErrKindValidation ErrorKind = "Validation"
 )
 
 // NewAPIError creates a new API error.
@@ -102,6 +103,20 @@ func NewPolicyError(operation string) *Error {
 		Code:    ErrDisallowedByClientPolicy,
 		Status:  451,
 		Message: fmt.Sprintf("%s is disallowed by client policy; perform this action via the Hetzner Robot UI", operation),
+	}
+}
+
+// NewValidationError returns an error for a request that this client rejected
+// locally, before sending it to the API, because it violates a documented
+// Hetzner constraint. Status mirrors the status the API would have returned
+// for the same condition, so callers can treat local and remote rejections
+// uniformly.
+func NewValidationError(code ErrorCode, message string, status int) *Error {
+	return &Error{
+		Kind:    ErrKindValidation,
+		Code:    code,
+		Status:  status,
+		Message: message,
 	}
 }
 
@@ -216,9 +231,16 @@ func IsUnauthorizedError(err error) bool {
 	return IsAPIError(err, ErrUnauthorized)
 }
 
-// IsFirewallRuleLimitExceededError checks if the error is a firewall rule limit exceeded error.
+// IsFirewallRuleLimitExceededError reports whether err indicates the inbound
+// firewall rule limit was exceeded, whether the request was rejected locally
+// by this client (see Firewall.ValidateRules) or by the Hetzner API. It
+// matches on the error code regardless of kind, so both origins are caught.
 func IsFirewallRuleLimitExceededError(err error) bool {
-	return IsAPIError(err, ErrFirewallRuleLimitExceeded)
+	var e *Error
+	if !errors.As(err, &e) {
+		return false
+	}
+	return e.Code == ErrFirewallRuleLimitExceeded
 }
 
 // IsInvalidInputError checks if the error is an invalid input error.

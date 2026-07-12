@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+IMPROVEMENTS:
+
+- **firewall**: Validate the inbound rule limit client-side — `Firewall.Update`, `CreateTemplate`, and
+  `UpdateTemplate` now reject configurations with more than `MaxFirewallInputRules` (10) input rules before contacting
+  the API, returning a `FIREWALL_RULE_LIMIT_EXCEEDED` validation error. The new exported `Firewall.ValidateRules` lets
+  callers run the same check up front, and `IsFirewallRuleLimitExceededError` now matches both locally rejected and
+  API-returned errors
+- **firewall**: Add `WithMaxFirewallInputRules(n)` to override the client-side inbound rule ceiling, so a stale
+  constant does not block valid configurations if Hetzner raises the documented limit before a library release catches
+  up (the API stays authoritative)
+- **errors**: Add `ErrKindValidation` and `NewValidationError` for requests this client rejects locally before
+  sending, carrying the HTTP status the API would have returned
+
 ## 1.0.0 (2026-07-12)
 
 BREAKING CHANGES:
