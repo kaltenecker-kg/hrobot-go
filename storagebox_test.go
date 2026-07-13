@@ -658,6 +658,80 @@ func TestStorageBoxService_ResetSubAccountPassword_Custom(t *testing.T) {
 	}
 }
 
+// TestStorageBoxService_List_Empty verifies an empty array response decodes to an empty slice, not an error.
+func TestStorageBoxService_List_Empty(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/storagebox" {
+			t.Errorf("expected path '/storagebox', got '%s'", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("[]"))
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	got, err := client.StorageBox.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(got))
+	}
+}
+
+// TestStorageBoxService_ListSnapshots_Empty verifies an empty snapshot list
+// decodes to an empty slice.
+func TestStorageBoxService_ListSnapshots_Empty(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/storagebox/42/snapshot" {
+			t.Errorf("expected path '/storagebox/42/snapshot', got '%s'", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("[]"))
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	got, err := client.StorageBox.ListSnapshots(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("ListSnapshots returned error: %v", err)
+	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(got))
+	}
+}
+
+// TestStorageBoxService_ListSubAccounts_Empty verifies an empty sub-account
+// list decodes to an empty slice.
+func TestStorageBoxService_ListSubAccounts_Empty(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/storagebox/42/subaccount" {
+			t.Errorf("expected path '/storagebox/42/subaccount', got '%s'", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("[]"))
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	got, err := client.StorageBox.ListSubAccounts(context.Background(), 42)
+	if err != nil {
+		t.Fatalf("ListSubAccounts returned error: %v", err)
+	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(got))
+	}
+}
+
 // TestStorageBoxService_ErrorHandling verifies non-2xx responses surface as
 // errors across the service's verbs (GET/POST/DELETE) and return shapes. It is
 // not wrapped with spectest.Handler because the error bodies are generic, not

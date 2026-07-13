@@ -502,3 +502,27 @@ func TestIPService_DeleteMAC(t *testing.T) {
 		t.Fatalf("IP.DeleteMAC returned error: %v", err)
 	}
 }
+
+// TestIPService_List_Empty verifies an empty array response decodes to an empty slice, not an error.
+func TestIPService_List_Empty(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/ip" {
+			t.Errorf("expected path '/ip', got '%s'", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("[]"))
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	got, err := client.IP.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(got))
+	}
+}

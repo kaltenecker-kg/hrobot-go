@@ -284,3 +284,27 @@ func TestSSHKey_BerlinTime(t *testing.T) {
 		t.Errorf("Expected created_at to be %v, got %v", expectedTime, key.CreatedAt.Time)
 	}
 }
+
+// TestKeyService_List_Empty verifies an empty array response decodes to an empty slice, not an error.
+func TestKeyService_List_Empty(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/key" {
+			t.Errorf("expected path '/key', got '%s'", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("[]"))
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	got, err := client.Key.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(got))
+	}
+}
