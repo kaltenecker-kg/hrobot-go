@@ -973,6 +973,28 @@ func TestBootService_ActivateWindows(t *testing.T) {
 	}
 }
 
+// TestBootService_ActivateWindows_RequiresLangAndOS asserts that missing lang
+// or os is rejected locally without making a request, per the doc's Input
+// table for POST /boot/{server-number}/windows (both are required).
+func TestBootService_ActivateWindows_RequiresLangAndOS(t *testing.T) {
+	// The server fails the test if reached, proving the rejection happens
+	// locally rather than the request erroring for some other reason.
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("ActivateWindows must not perform an HTTP call for missing input; got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	if _, err := client.Boot.ActivateWindows(ctx, ServerID(321), "", "Windows Server 2019 Standard Edition"); err == nil {
+		t.Fatal("expected error for missing lang, got nil")
+	}
+	if _, err := client.Boot.ActivateWindows(ctx, ServerID(321), "en", ""); err == nil {
+		t.Fatal("expected error for missing os, got nil")
+	}
+}
+
 func TestBootService_DeactivateWindows(t *testing.T) {
 	spec := loadSpec(t)
 	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

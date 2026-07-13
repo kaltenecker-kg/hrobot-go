@@ -446,6 +446,13 @@ func (b *BootService) GetWindows(ctx context.Context, serverID ServerID) (*Windo
 // system to install (e.g. "Windows Server 2019 Standard Edition"); the doc's
 // Input table for this endpoint lists both lang and os as required.
 func (b *BootService) ActivateWindows(ctx context.Context, serverID ServerID, lang string, os string) (*WindowsConfig, error) {
+	if lang == "" {
+		return nil, NewParseError("lang is required", nil)
+	}
+	if os == "" {
+		return nil, NewParseError("os is required", nil)
+	}
+
 	path := fmt.Sprintf("/boot/%s/windows", serverID.String())
 
 	data := url.Values{}
