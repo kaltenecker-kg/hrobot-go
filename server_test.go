@@ -332,3 +332,24 @@ func TestServerService_ErrorHandling(t *testing.T) {
 		})
 	}
 }
+
+// TestServerService_List_Empty verifies an empty array response decodes to an empty slice, not an error.
+func TestServerService_List_Empty(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/server" {
+			t.Errorf("expected path '/server', got '%s'", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("[]"))
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	got, err := client.Server.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(got))
+	}
+}

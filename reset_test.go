@@ -418,3 +418,24 @@ func TestResetService_List(t *testing.T) {
 		}
 	}
 }
+
+// TestResetService_List_Empty verifies an empty array response decodes to an empty slice, not an error.
+func TestResetService_List_Empty(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/reset" {
+			t.Errorf("expected path '/reset', got '%s'", r.URL.Path)
+		}
+		_, _ = w.Write([]byte("[]"))
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	got, err := client.Reset.List(context.Background())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %d items", len(got))
+	}
+}
