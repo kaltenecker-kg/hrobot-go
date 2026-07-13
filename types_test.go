@@ -210,6 +210,128 @@ func TestTrafficSizeString(t *testing.T) {
 	}
 }
 
+func TestTrafficSizeMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		ts   TrafficSize
+		want string
+	}{
+		{"raw preserved", TrafficSize{Raw: "5 TB", Bytes: 5497558138880}, `"5 TB"`},
+		{"unlimited without raw", TrafficSize{Unlimited: true}, `"unlimited"`},
+		{"bytes without raw", TrafficSize{Bytes: 1099511627776}, `1099511627776`},
+		{"zero", TrafficSize{}, `0`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := json.Marshal(tt.ts)
+			if err != nil {
+				t.Fatalf("MarshalJSON() error = %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("MarshalJSON() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestTrafficSizeRoundTrip verifies that decoding an API value and re-encoding
+// it yields the original wire representation.
+func TestTrafficSizeRoundTrip(t *testing.T) {
+	for _, wire := range []string{`"unlimited"`, `"5 TB"`, `"5497558138880"`, `1099511627776`} {
+		t.Run(wire, func(t *testing.T) {
+			var ts TrafficSize
+			if err := json.Unmarshal([]byte(wire), &ts); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			got, err := json.Marshal(ts)
+			if err != nil {
+				t.Fatalf("encode: %v", err)
+			}
+			if string(got) != wire {
+				t.Errorf("round-trip = %s, want %s", got, wire)
+			}
+		})
+	}
+}
+
+func TestStringFloatMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		sf   StringFloat
+		want string
+	}{
+		{"typical", StringFloat(123.4567), `"123.4567"`},
+		{"zero", StringFloat(0), `"0.0000"`},
+		{"rounds to four places", StringFloat(1.23456789), `"1.2346"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := json.Marshal(tt.sf)
+			if err != nil {
+				t.Fatalf("MarshalJSON() error = %v", err)
+			}
+			if string(got) != tt.want {
+				t.Errorf("MarshalJSON() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestStringFloatRoundTrip verifies a string-encoded float survives a
+// decode/encode cycle at the API's fixed precision.
+func TestStringFloatRoundTrip(t *testing.T) {
+	var sf StringFloat
+	if err := json.Unmarshal([]byte(`"123.4567"`), &sf); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	got, err := json.Marshal(sf)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if string(got) != `"123.4567"` {
+		t.Errorf("round-trip = %s, want %q", got, `"123.4567"`)
+	}
+}
+
+func TestBerlinTimeMarshalJSON(t *testing.T) {
+	// A Berlin-local timestamp encodes back to the API's wire format.
+	bt := BerlinTime{Time: time.Date(2025, 10, 24, 14, 30, 0, 0, berlinLocation)}
+	got, err := json.Marshal(bt)
+	if err != nil {
+		t.Fatalf("MarshalJSON() error = %v", err)
+	}
+	if string(got) != `"2025-10-24 14:30:00"` {
+		t.Errorf("MarshalJSON() = %s, want %q", got, `"2025-10-24 14:30:00"`)
+	}
+
+	// A UTC instant is converted to Berlin local time before formatting.
+	utc := BerlinTime{Time: time.Date(2025, 10, 24, 12, 30, 0, 0, time.UTC)}
+	got, err = json.Marshal(utc)
+	if err != nil {
+		t.Fatalf("MarshalJSON() error = %v", err)
+	}
+	if string(got) != `"2025-10-24 14:30:00"` { // UTC+2 in October (CEST)
+		t.Errorf("MarshalJSON() = %s, want %q", got, `"2025-10-24 14:30:00"`)
+	}
+}
+
+// TestBerlinTimeRoundTrip verifies a wire timestamp decodes and re-encodes to
+// the same string.
+func TestBerlinTimeRoundTrip(t *testing.T) {
+	const wire = `"2025-10-24 14:30:00"`
+	var bt BerlinTime
+	if err := json.Unmarshal([]byte(wire), &bt); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	got, err := json.Marshal(bt)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+	if string(got) != wire {
+		t.Errorf("round-trip = %s, want %s", got, wire)
+	}
+}
+
 func TestBerlinTimeUnmarshalJSON(t *testing.T) {
 	tests := []struct {
 		name    string
