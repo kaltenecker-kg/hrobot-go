@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+IMPROVEMENTS:
+
+- **client**: Bound the automatic-retry sleep by clamping a server's `Retry-After` to a configurable maximum, so a
+  hostile or misbehaving endpoint cannot pin a caller's goroutine on an arbitrarily long wait (the per-request HTTP
+  timeout does not cover this sleep). Both the delta-seconds and HTTP-date forms are clamped, and an out-of-range
+  numeric value is treated as above the cap rather than ignored
+- **client**: Add `WithMaxRetryAfter(d)` to override the cap, defaulting to `DefaultMaxRetryAfter`
+
 ## 1.2.0 (2026-07-12)
 
 IMPROVEMENTS:
