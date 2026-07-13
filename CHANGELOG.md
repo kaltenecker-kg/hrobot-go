@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+BREAKING CHANGES:
+
+- **server**: `Server.LinkedStorageBox` is now `*int` (was `string`) to match the API, which returns
+  `linked_storagebox` as a nullable integer
+
+BUG FIXES:
+
+- **server**: Fix `Server.LinkedStorageBox` decoding — the field was typed `string` while the API returns a nullable
+  integer, so any server-detail response with a linked storage box failed to unmarshal. It is now `*int` (`nil` when
+  the server has no linked storage box)
+
 IMPROVEMENTS:
 
 - **client**: Bound the automatic-retry sleep by clamping a server's `Retry-After` to a configurable maximum, so a

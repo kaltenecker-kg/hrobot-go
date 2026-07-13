@@ -139,6 +139,7 @@ func TestServerService_Get(t *testing.T) {
 						"mask": "255.255.255.192",
 					},
 				},
+				"linked_storagebox": 12345,
 			},
 		}
 		if err := json.NewEncoder(w).Encode(response); err != nil {
@@ -169,6 +170,12 @@ func TestServerService_Get(t *testing.T) {
 
 	if len(srv.Subnet) != 1 {
 		t.Errorf("expected 1 subnet, got %d", len(srv.Subnet))
+	}
+
+	if srv.LinkedStorageBox == nil {
+		t.Error("expected linked_storagebox to be set")
+	} else if *srv.LinkedStorageBox != 12345 {
+		t.Errorf("expected linked storage box 12345, got %d", *srv.LinkedStorageBox)
 	}
 }
 
