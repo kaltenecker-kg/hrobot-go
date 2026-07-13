@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
+	"github.com/kaltenecker-kg/hrobot-go/v2/internal/spectest"
 )
 
 func TestSubnetService_Cancel_DisallowedByPolicy(t *testing.T) {

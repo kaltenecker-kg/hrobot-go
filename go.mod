@@ -1,4 +1,4 @@
-module github.com/kaltenecker-kg/hrobot-go
+module github.com/kaltenecker-kg/hrobot-go/v2
 
 go 1.26
 
