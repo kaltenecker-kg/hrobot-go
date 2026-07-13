@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
+	"github.com/kaltenecker-kg/hrobot-go/v2/internal/spectest"
 )
 
 func TestKeyService_List(t *testing.T) {

@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
+	"github.com/kaltenecker-kg/hrobot-go/v2/internal/spectest"
 )
 
 // loadSpec loads the vendored OpenAPI spec once per test, failing the test

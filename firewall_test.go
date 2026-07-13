@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
+	"github.com/kaltenecker-kg/hrobot-go/v2/internal/spectest"
 )
 
 func TestFirewallService_Get(t *testing.T) {

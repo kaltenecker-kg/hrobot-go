@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.1 (2026-07-13)
+
+BUG FIXES:
+
+- **module**: Set the module path to `github.com/kaltenecker-kg/hrobot-go/v2` as required for a v2 release. The
+  v2.0.0 tag is not usable with Go tooling (`go get` fails with "module contains a go.mod file, so module path must
+  match major version"); consumers should require v2.0.1 and import `github.com/kaltenecker-kg/hrobot-go/v2`
+
 ## 2.0.0 (2026-07-13)
 
 BREAKING CHANGES:

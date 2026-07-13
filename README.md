@@ -7,7 +7,7 @@ Follows the same pattern as [hcloud-go](https://github.com/hetznercloud/hcloud-g
 ## Installation
 
 ```bash
-go get github.com/kaltenecker-kg/hrobot-go
+go get github.com/kaltenecker-kg/hrobot-go/v2
 ```
 
 ## Usage
@@ -21,7 +21,7 @@ import (
     "log"
     "os"
 
-    "github.com/kaltenecker-kg/hrobot-go"
+    "github.com/kaltenecker-kg/hrobot-go/v2"
 )
 
 func main() {

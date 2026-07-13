@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
-	"github.com/kaltenecker-kg/hrobot-go/internal/urlencode"
+	"github.com/kaltenecker-kg/hrobot-go/v2/internal/urlencode"
 )
 
 // MaxFirewallInputRules is the default maximum number of inbound (input)
