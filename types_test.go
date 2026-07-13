@@ -73,6 +73,14 @@ func TestTrafficSizeUnmarshalJSON(t *testing.T) {
 			wantErr:   false,
 		},
 		{
+			name:      "oversized human-readable string",
+			input:     `"16777216 TB"`,
+			wantUnlim: false,
+			wantBytes: ^uint64(0),
+			wantRaw:   "16777216 TB",
+			wantErr:   false,
+		},
+		{
 			name:      "null",
 			input:     `null`,
 			wantUnlim: false,
