@@ -305,6 +305,13 @@ func TestBerlinTimeMarshalJSON(t *testing.T) {
 	}
 
 	// A UTC instant is converted to Berlin local time before formatting.
+	// This asserts the +2 (CEST) October offset, so it only holds when the
+	// real IANA zone is available; if the tz database is missing,
+	// berlinLocation falls back to a fixed CET (+1) zone (see types.go init)
+	// and the offset would differ. Skip that leg rather than fail spuriously.
+	if _, err := time.LoadLocation("Europe/Berlin"); err != nil {
+		t.Skipf("Europe/Berlin tz data unavailable, skipping UTC-conversion assertion: %v", err)
+	}
 	utc := BerlinTime{Time: time.Date(2025, 10, 24, 12, 30, 0, 0, time.UTC)}
 	got, err = json.Marshal(utc)
 	if err != nil {
