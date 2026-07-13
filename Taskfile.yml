@@ -1,0 +1,68 @@
+# Task runner for hrobot-go (https://taskfile.dev). Mirrors the GNUmakefile
+# targets and adds a `release` task that tags the current Version and pushes
+# to trigger the release workflow (.github/workflows/release.yml).
+version: '3'
+
+vars:
+  # Single source of truth: the Version constant in client.go.
+  VERSION:
+    sh: grep -oE 'Version = "[0-9]+\.[0-9]+\.[0-9]+"' client.go | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1
+
+tasks:
+  default:
+    deps: [fmt, lint, vet, test]
+
+  fmt:
+    desc: Format Go files.
+    cmds:
+      - golangci-lint run --fix
+
+  lint:
+    desc: Run the linter.
+    cmds:
+      - golangci-lint run
+
+  vet:
+    desc: Run go vet.
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run unit tests with the race detector.
+    cmds:
+      - go test -race -cover -timeout=180s ./...
+
+  tidy-check:
+    desc: Fail if go.mod/go.sum are not tidy.
+    cmds:
+      - go mod tidy -diff
+
+  verify:
+    desc: Verify module dependencies against go.sum.
+    cmds:
+      - go mod verify
+
+  version:
+    desc: Print the release version derived from client.go.
+    silent: true
+    cmds:
+      - echo "v{{.VERSION}}"
+
+  release:
+    desc: Verify, tag v<Version>, and push to trigger the release workflow.
+    deps: [lint, vet, test]
+    preconditions:
+      - sh: '[ -n "{{.VERSION}}" ]'
+        msg: "could not derive Version from client.go"
+      - sh: '[ -z "$(git status --porcelain)" ]'
+        msg: "working tree is not clean; commit or stash first"
+      - sh: '[ "$(git rev-parse --abbrev-ref HEAD)" = "main" ]'
+        msg: "releases must be cut from main"
+      - sh: 'git fetch -q origin main && [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ]'
+        msg: "local main is not in sync with origin/main; pull first"
+      - sh: '! git rev-parse "v{{.VERSION}}" >/dev/null 2>&1'
+        msg: "tag v{{.VERSION}} already exists"
+    cmds:
+      - git tag -a "v{{.VERSION}}" -m "v{{.VERSION}}"
+      - git push origin "v{{.VERSION}}"
+      - echo "pushed v{{.VERSION}}; the release workflow will publish the GitHub Release"
