@@ -2,9 +2,9 @@ package hrobot
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 
 	"github.com/kaltenecker-kg/hrobot-go/internal/spectest"
@@ -328,7 +328,13 @@ func TestTrafficService_ErrorHandling(t *testing.T) {
 		t.Run(http.StatusText(statusCode), func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.WriteHeader(statusCode)
-				_, _ = w.Write([]byte(`{"error":{"status":` + strconv.Itoa(statusCode) + `,"code":"ERROR","message":"test error"}}`))
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
+						"status":  statusCode,
+						"code":    "ERROR",
+						"message": "test error",
+					},
+				})
 			}))
 			defer server.Close()
 
