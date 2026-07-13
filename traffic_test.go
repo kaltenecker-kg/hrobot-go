@@ -2,6 +2,7 @@ package hrobot
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -316,5 +317,37 @@ func TestTrafficService_Get_MultipleIPsAndSubnets(t *testing.T) {
 
 	if len(traffic.Data) != 2 {
 		t.Errorf("expected 2 entries in Data, got %d", len(traffic.Data))
+	}
+}
+
+// TestTrafficService_ErrorHandling verifies non-2xx responses surface as
+// errors from Get. It is not wrapped with spectest.Handler because the error
+// bodies are generic, not per-operation response fixtures.
+func TestTrafficService_ErrorHandling(t *testing.T) {
+	for _, statusCode := range []int{http.StatusInternalServerError, http.StatusNotFound, http.StatusUnauthorized} {
+		t.Run(http.StatusText(statusCode), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(statusCode)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
+						"status":  statusCode,
+						"code":    "ERROR",
+						"message": "test error",
+					},
+				})
+			}))
+			defer server.Close()
+
+			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+			_, err := client.Traffic.Get(context.Background(), TrafficGetParams{
+				Type: TrafficTypeMonth,
+				From: "2019-01-01",
+				To:   "2019-01-07",
+				IP:   "1.2.3.4",
+			})
+			if err == nil {
+				t.Errorf("expected error for status %d, got nil", statusCode)
+			}
+		})
 	}
 }
