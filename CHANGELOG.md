@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 (2026-07-13)
 
 BREAKING CHANGES:
 
@@ -15,6 +15,8 @@ BUG FIXES:
 - **server**: Fix `Server.LinkedStorageBox` decoding — the field was typed `string` while the API returns a nullable
   integer, so any server-detail response with a linked storage box failed to unmarshal. It is now `*int` (`nil` when
   the server has no linked storage box)
+- **boot**: `ActivateWindows` now rejects an empty `lang` or `os` locally with a parse error before contacting the API,
+  matching `ActivateLinux`, `ActivateVNC`, and `ActivateRescue` (the doc lists both as required)
 
 IMPROVEMENTS:
 
@@ -23,6 +25,8 @@ IMPROVEMENTS:
   timeout does not cover this sleep). Both the delta-seconds and HTTP-date forms are clamped, and an out-of-range
   numeric value is treated as above the cap rather than ignored
 - **client**: Add `WithMaxRetryAfter(d)` to override the cap, defaulting to `DefaultMaxRetryAfter`
+- **firewall**: Firewall rule form bodies are now encoded with a deterministic (sorted) key order, so repeated requests
+  for the same configuration produce identical payloads
 
 ## 1.2.0 (2026-07-12)
 
