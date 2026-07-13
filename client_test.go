@@ -469,6 +469,7 @@ func TestRetryAfter(t *testing.T) {
 		{"exactly cap", "30", maxAfter},
 		{"above cap clamped", "315360000", maxAfter}, // ~10 years
 		{"overflow value clamped", "99999999999999999", maxAfter},
+		{"out-of-range value clamped", "99999999999999999999999999", maxAfter},
 		{"negative ignored", "-5", 0},
 		{"garbage ignored", "soon", 0},
 		{"far-future http date clamped", future, maxAfter},

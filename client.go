@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -286,6 +287,12 @@ func retryAfter(h http.Header, limit time.Duration) time.Duration {
 			return limit
 		}
 		d = time.Duration(n) * time.Second
+	case errors.Is(err, strconv.ErrRange) && !strings.HasPrefix(v, "-"):
+		// A positive value too large for int is, by definition, well above
+		// the cap. Atoi reports ErrRange for it, so treat it as clamped
+		// rather than falling through to the HTTP-date parse and losing the
+		// bound.
+		return limit
 	default:
 		if t, perr := http.ParseTime(v); perr == nil {
 			d = time.Until(t)
