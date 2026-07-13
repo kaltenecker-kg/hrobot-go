@@ -183,6 +183,16 @@ the spec:
   (`internal/spectest` caught this immediately once `GET /subnet` was
   wrapped — the fixture is doc-verbatim, so the mismatch was in the spec).
   Added `nullable: true` to match.
+- The doc's `GET /subnet/{net-ip}/cancellation` example body renders the
+  key as `cancellation-date` (hyphen), but the field-description table
+  directly below it — and the `POST`/`DELETE` examples for the same
+  resource — use `cancellation_date` (underscore). The hyphen is a
+  documentation typo, inconsistent with every other field in the object.
+  The spec (`SubnetCancellation.cancellation_date`), the `SubnetCancellation`
+  struct, and the `TestSubnetService_GetCancellation` fixture therefore use
+  the underscore form; that is the authoritative key. This is the one
+  deliberate departure from doc-verbatim fixtures in the subnet suite, and
+  it is enforced by `spectest`.
 
 Also fixed in test fixtures (not the spec):
 `TestSubnetService_DeleteMAC`/`WithdrawCancellation` previously asserted on
