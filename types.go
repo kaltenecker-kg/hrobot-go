@@ -434,7 +434,7 @@ type Server struct {
 	Windows          bool         `json:"windows,omitempty"`
 	WOL              bool         `json:"wol,omitempty"`
 	HotSwap          bool         `json:"hot_swap,omitempty"`
-	LinkedStorageBox string       `json:"linked_storagebox,omitempty"`
+	LinkedStorageBox *int         `json:"linked_storagebox,omitempty"`
 }
 
 // Subnet represents a network subnet.
