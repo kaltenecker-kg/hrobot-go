@@ -1148,3 +1148,100 @@ func equalIntSlice(a, b []int) bool {
 	}
 	return true
 }
+
+// TestBootConfig_Accessors exercises the Active*/Available* helpers that read
+// the polymorphic os/dist/lang/arch fields, which decode to a scalar when the
+// config is active and to a list of choices when it is not.
+// TestBootConfig_Accessors covers the Linux, VNC, and Windows accessors.
+// RescueConfig's accessors are covered separately by TestRescueConfig_Accessors.
+// Each subtest asserts both sides of the polymorphic contract: when active,
+// Active* returns the scalar and Available* is nil; when inactive, Active*
+// returns the zero value and Available* returns the list of choices.
+func TestBootConfig_Accessors(t *testing.T) {
+	t.Run("linux active and inactive", func(t *testing.T) {
+		var active LinuxConfig
+		if err := json.Unmarshal([]byte(`{"active":true,"dist":"Debian 12","lang":"en","arch":64}`), &active); err != nil {
+			t.Fatal(err)
+		}
+		if active.ActiveDist() != "Debian 12" || active.ActiveLang() != "en" || active.ActiveArch() != 64 {
+			t.Errorf("active accessors = (%q,%q,%d), want (Debian 12,en,64)", active.ActiveDist(), active.ActiveLang(), active.ActiveArch())
+		}
+		if active.AvailableDists() != nil || active.AvailableLangs() != nil || active.AvailableArchs() != nil {
+			t.Errorf("Available* = (%v,%v,%v), want all nil when active", active.AvailableDists(), active.AvailableLangs(), active.AvailableArchs())
+		}
+
+		var inactive LinuxConfig
+		if err := json.Unmarshal([]byte(`{"active":false,"dist":["Debian 12","CentOS"],"lang":["en","de"],"arch":[64]}`), &inactive); err != nil {
+			t.Fatal(err)
+		}
+		if inactive.ActiveDist() != "" || inactive.ActiveLang() != "" || inactive.ActiveArch() != 0 {
+			t.Errorf("Active* = (%q,%q,%d), want zero values when inactive", inactive.ActiveDist(), inactive.ActiveLang(), inactive.ActiveArch())
+		}
+		if got := inactive.AvailableDists(); len(got) != 2 || got[0] != "Debian 12" {
+			t.Errorf("AvailableDists = %v", got)
+		}
+		if got := inactive.AvailableLangs(); len(got) != 2 || got[1] != "de" {
+			t.Errorf("AvailableLangs = %v", got)
+		}
+		if got := inactive.AvailableArchs(); len(got) != 1 || got[0] != 64 {
+			t.Errorf("AvailableArchs = %v", got)
+		}
+	})
+
+	t.Run("vnc active and inactive", func(t *testing.T) {
+		var active VNCConfig
+		if err := json.Unmarshal([]byte(`{"active":true,"dist":"Fedora","lang":"en_US","arch":64}`), &active); err != nil {
+			t.Fatal(err)
+		}
+		if active.ActiveDist() != "Fedora" || active.ActiveLang() != "en_US" || active.ActiveArch() != 64 {
+			t.Errorf("active accessors = (%q,%q,%d)", active.ActiveDist(), active.ActiveLang(), active.ActiveArch())
+		}
+		if active.AvailableDists() != nil || active.AvailableLangs() != nil || active.AvailableArchs() != nil {
+			t.Errorf("Available* = (%v,%v,%v), want all nil when active", active.AvailableDists(), active.AvailableLangs(), active.AvailableArchs())
+		}
+
+		var inactive VNCConfig
+		if err := json.Unmarshal([]byte(`{"active":false,"dist":["Fedora","openSUSE"],"lang":["de_DE","en_US"],"arch":[64,32]}`), &inactive); err != nil {
+			t.Fatal(err)
+		}
+		if inactive.ActiveDist() != "" || inactive.ActiveLang() != "" || inactive.ActiveArch() != 0 {
+			t.Errorf("Active* = (%q,%q,%d), want zero values when inactive", inactive.ActiveDist(), inactive.ActiveLang(), inactive.ActiveArch())
+		}
+		if got := inactive.AvailableDists(); len(got) != 2 || got[0] != "Fedora" {
+			t.Errorf("AvailableDists = %v", got)
+		}
+		if got := inactive.AvailableLangs(); len(got) != 2 || got[0] != "de_DE" {
+			t.Errorf("AvailableLangs = %v", got)
+		}
+		if got := inactive.AvailableArchs(); len(got) != 2 || got[0] != 64 {
+			t.Errorf("AvailableArchs = %v", got)
+		}
+	})
+
+	t.Run("windows active and inactive", func(t *testing.T) {
+		var active WindowsConfig
+		if err := json.Unmarshal([]byte(`{"active":true,"os":"Windows Server 2019 Standard Edition","lang":"en"}`), &active); err != nil {
+			t.Fatal(err)
+		}
+		if active.ActiveOS() != "Windows Server 2019 Standard Edition" || active.ActiveLang() != "en" {
+			t.Errorf("active accessors = (%q,%q)", active.ActiveOS(), active.ActiveLang())
+		}
+		if active.AvailableOS() != nil || active.AvailableLangs() != nil {
+			t.Errorf("Available* = (%v,%v), want nil when active", active.AvailableOS(), active.AvailableLangs())
+		}
+
+		var inactive WindowsConfig
+		if err := json.Unmarshal([]byte(`{"active":false,"os":["Windows Server 2022 Standard Edition","Windows Server 2019 Standard Edition"],"lang":["en","de"]}`), &inactive); err != nil {
+			t.Fatal(err)
+		}
+		if inactive.ActiveOS() != "" || inactive.ActiveLang() != "" {
+			t.Errorf("Active* = (%q,%q), want empty when inactive", inactive.ActiveOS(), inactive.ActiveLang())
+		}
+		if got := inactive.AvailableOS(); len(got) != 2 || got[1] != "Windows Server 2019 Standard Edition" {
+			t.Errorf("AvailableOS = %v", got)
+		}
+		if got := inactive.AvailableLangs(); len(got) != 2 || got[0] != "en" {
+			t.Errorf("AvailableLangs = %v", got)
+		}
+	})
+}
