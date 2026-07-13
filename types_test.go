@@ -235,6 +235,16 @@ func TestBerlinTimeUnmarshalJSON(t *testing.T) {
 			want:    "0001-01-01 00:00:00 +0000 UTC",
 			wantErr: false,
 		},
+		{
+			name:    "unparseable timestamp string",
+			input:   `"not-a-date"`,
+			wantErr: true,
+		},
+		{
+			name:    "non-string JSON",
+			input:   `12345`,
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
