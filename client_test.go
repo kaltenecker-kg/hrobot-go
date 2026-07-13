@@ -603,22 +603,34 @@ func TestUpdateRateLimit(t *testing.T) {
 		}
 	})
 
-	t.Run("no headers leaves state untouched", func(t *testing.T) {
+	t.Run("no headers preserves prior state", func(t *testing.T) {
 		c := NewClient("user", "pass")
-		c.updateRateLimit(http.Header{}) // nothing seen
-		if rl := c.LastRateLimit(); rl != (RateLimit{}) {
-			t.Errorf("LastRateLimit = %+v, want zero value", rl)
+		seed := http.Header{}
+		seed.Set("RateLimit-Limit", "100")
+		seed.Set("RateLimit-Remaining", "42")
+		c.updateRateLimit(seed)
+		want := c.LastRateLimit()
+
+		c.updateRateLimit(http.Header{}) // nothing seen: must not clobber state
+		if got := c.LastRateLimit(); got != want {
+			t.Errorf("LastRateLimit = %+v, want unchanged %+v", got, want)
 		}
 	})
 
-	t.Run("garbage values ignored", func(t *testing.T) {
+	t.Run("garbage values preserve prior state", func(t *testing.T) {
 		c := NewClient("user", "pass")
-		h := http.Header{}
-		h.Set("RateLimit-Limit", "not-a-number")
-		h.Set("RateLimit-Reset", "soon")
-		c.updateRateLimit(h)
-		if rl := c.LastRateLimit(); rl != (RateLimit{}) {
-			t.Errorf("LastRateLimit = %+v, want zero value (garbage ignored)", rl)
+		seed := http.Header{}
+		seed.Set("RateLimit-Limit", "100")
+		seed.Set("RateLimit-Remaining", "42")
+		c.updateRateLimit(seed)
+		want := c.LastRateLimit()
+
+		garbage := http.Header{}
+		garbage.Set("RateLimit-Limit", "not-a-number")
+		garbage.Set("RateLimit-Reset", "soon")
+		c.updateRateLimit(garbage) // nothing parses: must not clobber state
+		if got := c.LastRateLimit(); got != want {
+			t.Errorf("LastRateLimit = %+v, want unchanged %+v", got, want)
 		}
 	})
 }
