@@ -145,7 +145,7 @@ func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 				}
 
 				bytes := num * float64(multiplier)
-				if bytes >= float64(uint64(math.MaxUint64)) {
+				if bytes >= float64(math.MaxUint64) {
 					t.Bytes = math.MaxUint64
 				} else {
 					t.Bytes = uint64(bytes)
