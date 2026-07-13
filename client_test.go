@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestUnwrapResponse(t *testing.T) {
@@ -174,6 +175,20 @@ func TestClientOptions(t *testing.T) {
 		client := NewClient("user", "pass", WithApplication("", "2.3.4"))
 		if client.userAgent != UserAgent {
 			t.Errorf("userAgent = %s, want default %s", client.userAgent, UserAgent)
+		}
+	})
+
+	t.Run("WithMaxRetryAfter overrides default", func(t *testing.T) {
+		client := NewClient("user", "pass", WithMaxRetryAfter(2*time.Minute))
+		if client.maxRetryAfter != 2*time.Minute {
+			t.Errorf("maxRetryAfter = %v, want %v", client.maxRetryAfter, 2*time.Minute)
+		}
+	})
+
+	t.Run("WithMaxRetryAfter ignores non-positive", func(t *testing.T) {
+		client := NewClient("user", "pass", WithMaxRetryAfter(0))
+		if client.maxRetryAfter != DefaultMaxRetryAfter {
+			t.Errorf("maxRetryAfter = %v, want default %v", client.maxRetryAfter, DefaultMaxRetryAfter)
 		}
 	})
 
@@ -437,6 +452,84 @@ func TestDoRequest_PostRetriedOn429ThenSucceeds(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&requests); got != 2 {
 		t.Errorf("requests = %d, want 2 (POST must retry on 429)", got)
+	}
+}
+
+func TestRetryAfter(t *testing.T) {
+	const maxAfter = DefaultMaxRetryAfter
+	future := time.Now().Add(365 * 24 * time.Hour).UTC().Format(http.TimeFormat)
+	tests := []struct {
+		name  string
+		value string
+		want  time.Duration
+	}{
+		{"absent", "", 0},
+		{"zero seconds", "0", 0},
+		{"small seconds", "5", 5 * time.Second},
+		{"exactly cap", "30", maxAfter},
+		{"above cap clamped", "315360000", maxAfter}, // ~10 years
+		{"overflow value clamped", "99999999999999999", maxAfter},
+		{"negative ignored", "-5", 0},
+		{"garbage ignored", "soon", 0},
+		{"far-future http date clamped", future, maxAfter},
+		{"past http date ignored", "Mon, 02 Jan 2006 15:04:05 GMT", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := http.Header{}
+			if tt.value != "" {
+				h.Set("Retry-After", tt.value)
+			}
+			if got := retryAfter(h, maxAfter); got != tt.want {
+				t.Errorf("retryAfter(%q) = %v, want %v", tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDoRequest_RetryAfterClamped proves a hostile Retry-After cannot pin the
+// caller: the retry sleep is bounded by the configured cap even though the
+// context has no deadline and the header requests a ~10-year delay. It also
+// exercises WithMaxRetryAfter.
+func TestDoRequest_RetryAfterClamped(t *testing.T) {
+	var requests int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := atomic.AddInt32(&requests, 1)
+		if n == 1 {
+			w.Header().Set("Retry-After", "315360000") // ~10 years
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	// Shorten the cap via the public option so we don't wait the full default.
+	client := NewClient("user", "pass", WithBaseURL(srv.URL), WithMaxRetryAfter(50*time.Millisecond))
+
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		resp, err := client.doRequest(context.Background(), http.MethodGet, "/test", nil)
+		if resp != nil {
+			resp.Body.Close()
+		}
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		if elapsed := time.Since(start); elapsed > 5*time.Second {
+			t.Errorf("retry sleep not clamped: took %v", elapsed)
+		}
+		if got := atomic.LoadInt32(&requests); got != 2 {
+			t.Errorf("requests = %d, want 2 (retried after clamped delay)", got)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("doRequest still blocked after 5s: Retry-After not clamped")
 	}
 }
 
