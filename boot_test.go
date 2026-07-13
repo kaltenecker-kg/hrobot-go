@@ -977,7 +977,14 @@ func TestBootService_ActivateWindows(t *testing.T) {
 // or os is rejected locally without making a request, per the doc's Input
 // table for POST /boot/{server-number}/windows (both are required).
 func TestBootService_ActivateWindows_RequiresLangAndOS(t *testing.T) {
-	client := NewClient("test-user", "test-pass", WithBaseURL("http://127.0.0.1:0"))
+	// The server fails the test if reached, proving the rejection happens
+	// locally rather than the request erroring for some other reason.
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Fatalf("ActivateWindows must not perform an HTTP call for missing input; got %s %s", r.Method, r.URL.Path)
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	ctx := context.Background()
 
 	if _, err := client.Boot.ActivateWindows(ctx, ServerID(321), "", "Windows Server 2019 Standard Edition"); err == nil {
