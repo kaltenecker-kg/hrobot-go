@@ -3,6 +3,7 @@ package hrobot
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net"
 	"regexp"
 	"strconv"
@@ -143,7 +144,12 @@ func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 					multiplier = 1024 * 1024 * 1024 * 1024
 				}
 
-				t.Bytes = uint64(num * float64(multiplier))
+				bytes := num * float64(multiplier)
+				if bytes >= float64(uint64(math.MaxUint64)) {
+					t.Bytes = math.MaxUint64
+				} else {
+					t.Bytes = uint64(bytes)
+				}
 				return nil
 			}
 		}
