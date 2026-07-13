@@ -6,6 +6,9 @@ BREAKING CHANGES:
 
 - **server**: `Server.LinkedStorageBox` is now `*int` (was `string`) to match the API, which returns
   `linked_storagebox` as a nullable integer
+- **client**: Remove the deprecated `Client.GetWrappedList` method. It became a pure alias for `Get` once wrapper-key
+  auto-detection landed; callers should pass a plain slice to `Get`, which auto-detects the `[{"<key>": ...}, ...]`
+  envelope
 
 BUG FIXES:
 

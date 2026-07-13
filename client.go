@@ -650,13 +650,3 @@ func (c *Client) DeleteWithBody(ctx context.Context, path string, data url.Value
 	}
 	return c.handleResponse(ctx, resp, v)
 }
-
-// GetWrappedList performs a GET for an array response whose elements are
-// wrapped, e.g. `[{"server": {...}}, ...]`.
-//
-// Deprecated: callers can now pass a plain slice to Get; the wrapper key is
-// auto-detected. This method is retained for source compatibility and
-// ignores wrapperKey.
-func (c *Client) GetWrappedList(ctx context.Context, path string, _ string, v any) error {
-	return c.Get(ctx, path, v)
-}
