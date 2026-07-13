@@ -334,7 +334,7 @@ func TestErrorFromResponse(t *testing.T) {
 	})
 
 	t.Run("body status zero falls back to http status", func(t *testing.T) {
-		body := []byte(`{"error":{"code":"INVALID_INPUT","message":"bad"}}`)
+		body := []byte(`{"error":{"status":0,"code":"INVALID_INPUT","message":"bad"}}`)
 		err := errorFromResponse(400, body)
 
 		var e *Error
