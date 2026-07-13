@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -28,6 +29,14 @@ const (
 	UserAgent = "hrobot-go/" + Version
 )
 
+// DefaultMaxRetryAfter is the default ceiling on how long a Retry-After header
+// may delay a retry. The per-request HTTP timeout does not cover this wait (it
+// occurs after the response is received), so without a cap a hostile or
+// misbehaving endpoint could pin a caller's goroutine on an arbitrarily long
+// sleep. Values above the cap are clamped. Override it with WithMaxRetryAfter
+// when talking to a trusted endpoint whose backoff hints you want to honor.
+const DefaultMaxRetryAfter = 30 * time.Second
+
 // Client is the main API client for Hetzner Robot.
 type Client struct {
 	baseURL    string
@@ -43,6 +52,10 @@ type Client struct {
 	// maxFirewallInputRules is the ceiling enforced by the client-side
 	// firewall rule validation; see WithMaxFirewallInputRules.
 	maxFirewallInputRules int
+
+	// maxRetryAfter caps how long a server's Retry-After header may delay a
+	// retry; see WithMaxRetryAfter and DefaultMaxRetryAfter.
+	maxRetryAfter time.Duration
 
 	// API Services
 	Server     *ServerService
@@ -149,6 +162,21 @@ func WithMaxFirewallInputRules(n int) ClientOption {
 	}
 }
 
+// WithMaxRetryAfter overrides the ceiling on how long a server's Retry-After
+// header may delay an automatic retry (default DefaultMaxRetryAfter). The
+// per-request HTTP timeout does not bound this wait, so the default caps it to
+// protect callers from a hostile or misbehaving endpoint that returns a huge
+// Retry-After value. Raise it only when talking to a trusted endpoint whose
+// longer backoff hints you want to honor. Values <= 0 are ignored and the
+// default is kept.
+func WithMaxRetryAfter(d time.Duration) ClientOption {
+	return func(c *Client) {
+		if d > 0 {
+			c.maxRetryAfter = d
+		}
+	}
+}
+
 // NewClient creates a new Hetzner Robot API client.
 func NewClient(username, password string, opts ...ClientOption) *Client {
 	c := &Client{
@@ -157,6 +185,7 @@ func NewClient(username, password string, opts ...ClientOption) *Client {
 		password:              password,
 		userAgent:             UserAgent,
 		maxFirewallInputRules: MaxFirewallInputRules,
+		maxRetryAfter:         DefaultMaxRetryAfter,
 		httpClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
@@ -236,22 +265,43 @@ func (c *Client) updateRateLimit(h http.Header) {
 	c.rateLimitMu.Unlock()
 }
 
-// retryAfter returns the duration the server requested via Retry-After,
-// or 0 if no parseable value is present.
-func retryAfter(h http.Header) time.Duration {
+// retryAfter returns the duration the server requested via Retry-After, or 0
+// if no parseable value is present. The result is clamped to limit so a
+// hostile or misbehaving endpoint cannot pin a caller's goroutine on an
+// arbitrarily long sleep (the per-request HTTP timeout does not cover this
+// wait, since it happens after the response is received). Clamping also
+// neutralizes the int64 overflow edge where a value beyond ~292 years would
+// otherwise wrap to a negative duration.
+func retryAfter(h http.Header, limit time.Duration) time.Duration {
 	v := h.Get("Retry-After")
 	if v == "" {
 		return 0
 	}
-	if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-		return time.Duration(n) * time.Second
-	}
-	if t, err := http.ParseTime(v); err == nil {
-		if d := time.Until(t); d > 0 {
-			return d
+	var d time.Duration
+	switch n, err := strconv.Atoi(v); {
+	case err == nil && n >= 0:
+		// Cap the seconds before multiplying so the int64-nanosecond
+		// conversion cannot overflow and wrap to a bogus (possibly
+		// negative) duration.
+		if int64(n) > int64(limit/time.Second) {
+			return limit
+		}
+		d = time.Duration(n) * time.Second
+	case errors.Is(err, strconv.ErrRange) && !strings.HasPrefix(v, "-"):
+		// A positive value too large for int is, by definition, well above
+		// the cap. Atoi reports ErrRange for it, so treat it as clamped
+		// rather than falling through to the HTTP-date parse and losing the
+		// bound.
+		return limit
+	default:
+		if t, perr := http.ParseTime(v); perr == nil {
+			d = time.Until(t)
 		}
 	}
-	return 0
+	if d <= 0 {
+		return 0
+	}
+	return min(d, limit)
 }
 
 // unwrapResponse strips Hetzner's `{"<resource>": ...}` envelope from a
@@ -426,7 +476,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 		c.updateRateLimit(resp.Header)
 
 		if shouldRetry(method, resp.StatusCode, attempt) && attempt < maxRetries-1 {
-			delay := retryAfter(resp.Header)
+			delay := retryAfter(resp.Header, c.maxRetryAfter)
 			if delay == 0 {
 				delay = time.Duration(attempt+1) * 500 * time.Millisecond
 			}
