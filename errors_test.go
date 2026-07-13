@@ -2,6 +2,7 @@ package hrobot
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -310,4 +311,60 @@ func TestErrorKinds(t *testing.T) {
 			t.Errorf("Error kind %v is empty", kind)
 		}
 	}
+}
+
+func TestErrorFromResponse(t *testing.T) {
+	t.Run("well-formed error body", func(t *testing.T) {
+		body := []byte(`{"error":{"status":404,"code":"SERVER_NOT_FOUND","message":"server not found"}}`)
+		err := errorFromResponse(404, body)
+
+		var e *Error
+		if !errors.As(err, &e) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if e.Code != ErrServerNotFound {
+			t.Errorf("Code = %q, want %q", e.Code, ErrServerNotFound)
+		}
+		if e.Status != 404 {
+			t.Errorf("Status = %d, want 404", e.Status)
+		}
+		if e.Message != "server not found" {
+			t.Errorf("Message = %q, want %q", e.Message, "server not found")
+		}
+	})
+
+	t.Run("body status zero falls back to http status", func(t *testing.T) {
+		body := []byte(`{"error":{"status":0,"code":"INVALID_INPUT","message":"bad"}}`)
+		err := errorFromResponse(400, body)
+
+		var e *Error
+		if !errors.As(err, &e) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if e.Status != 400 {
+			t.Errorf("Status = %d, want 400 (fallback to http status)", e.Status)
+		}
+	})
+
+	t.Run("unparseable body falls back to raw", func(t *testing.T) {
+		body := []byte(`<html>502 Bad Gateway</html>`)
+		err := errorFromResponse(502, body)
+
+		var e *Error
+		if !errors.As(err, &e) {
+			t.Fatalf("expected *Error, got %T", err)
+		}
+		if e.Kind != ErrKindAPI {
+			t.Errorf("Kind = %q, want %q", e.Kind, ErrKindAPI)
+		}
+		if e.Code != ErrUnknown {
+			t.Errorf("Code = %q, want %q", e.Code, ErrUnknown)
+		}
+		if e.Status != 502 {
+			t.Errorf("Status = %d, want 502", e.Status)
+		}
+		if !strings.Contains(e.Message, "HTTP 502") || !strings.Contains(e.Message, "Bad Gateway") {
+			t.Errorf("Message = %q, want it to include the raw body and status", e.Message)
+		}
+	})
 }

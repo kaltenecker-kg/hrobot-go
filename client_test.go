@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -557,6 +558,81 @@ func TestDoRequest_UnauthorizedRetriedOnceThenFails(t *testing.T) {
 	if got := atomic.LoadInt32(&requests); got != 2 {
 		t.Errorf("requests = %d, want 2 (401 retried exactly once)", got)
 	}
+}
+
+func TestUpdateRateLimit(t *testing.T) {
+	t.Run("parses limit and remaining", func(t *testing.T) {
+		c := NewClient("user", "pass")
+		h := http.Header{}
+		h.Set("RateLimit-Limit", "200")
+		h.Set("RateLimit-Remaining", "197")
+		c.updateRateLimit(h)
+
+		rl := c.LastRateLimit()
+		if rl.Limit != 200 {
+			t.Errorf("Limit = %d, want 200", rl.Limit)
+		}
+		if rl.Remaining != 197 {
+			t.Errorf("Remaining = %d, want 197", rl.Remaining)
+		}
+	})
+
+	t.Run("reset as absolute unix timestamp", func(t *testing.T) {
+		c := NewClient("user", "pass")
+		abs := time.Now().Add(time.Hour).Unix() // well above the 1e9 heuristic threshold
+		h := http.Header{}
+		h.Set("RateLimit-Reset", strconv.FormatInt(abs, 10))
+		c.updateRateLimit(h)
+
+		if got := c.LastRateLimit().Reset.Unix(); got != abs {
+			t.Errorf("Reset = %d, want %d (absolute unix timestamp)", got, abs)
+		}
+	})
+
+	t.Run("reset as seconds-until-reset delta", func(t *testing.T) {
+		c := NewClient("user", "pass")
+		before := time.Now()
+		h := http.Header{}
+		h.Set("RateLimit-Reset", "60") // small value: treated as a delta
+		c.updateRateLimit(h)
+
+		reset := c.LastRateLimit().Reset
+		// Expect roughly now+60s; allow slack for test execution time.
+		if reset.Before(before.Add(59*time.Second)) || reset.After(before.Add(70*time.Second)) {
+			t.Errorf("Reset = %v, want ~%v", reset, before.Add(60*time.Second))
+		}
+	})
+
+	t.Run("no headers preserves prior state", func(t *testing.T) {
+		c := NewClient("user", "pass")
+		seed := http.Header{}
+		seed.Set("RateLimit-Limit", "100")
+		seed.Set("RateLimit-Remaining", "42")
+		c.updateRateLimit(seed)
+		want := c.LastRateLimit()
+
+		c.updateRateLimit(http.Header{}) // nothing seen: must not clobber state
+		if got := c.LastRateLimit(); got != want {
+			t.Errorf("LastRateLimit = %+v, want unchanged %+v", got, want)
+		}
+	})
+
+	t.Run("garbage values preserve prior state", func(t *testing.T) {
+		c := NewClient("user", "pass")
+		seed := http.Header{}
+		seed.Set("RateLimit-Limit", "100")
+		seed.Set("RateLimit-Remaining", "42")
+		c.updateRateLimit(seed)
+		want := c.LastRateLimit()
+
+		garbage := http.Header{}
+		garbage.Set("RateLimit-Limit", "not-a-number")
+		garbage.Set("RateLimit-Reset", "soon")
+		c.updateRateLimit(garbage) // nothing parses: must not clobber state
+		if got := c.LastRateLimit(); got != want {
+			t.Errorf("LastRateLimit = %+v, want unchanged %+v", got, want)
+		}
+	})
 }
 
 func TestShouldRetry(t *testing.T) {

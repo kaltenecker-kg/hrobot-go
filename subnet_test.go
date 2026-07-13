@@ -286,13 +286,13 @@ func TestSubnetService_GetCancellation(t *testing.T) {
 		if r.Method != "GET" {
 			t.Errorf("expected GET, got '%s'", r.Method)
 		}
-		// Doc-verbatim example from GET /subnet/{net-ip}/cancellation. Note
-		// the doc's example body uses the key "cancellation-date" (hyphen)
-		// while the field description table below it documents
-		// "cancellation_date" (underscore) as the field name; the hyphen
-		// form appears to be a documentation typo since it is inconsistent
-		// with every other field in the same object (and with the POST/
-		// DELETE examples for this same resource).
+		// Example from GET /subnet/{net-ip}/cancellation. The doc's example
+		// body renders the key as "cancellation-date" (hyphen), but the field
+		// description table below it — and the POST/DELETE examples for this
+		// same resource — use "cancellation_date" (underscore). The hyphen is
+		// a documentation typo; the underscore form is authoritative and is
+		// what the spec and struct use. See spec/README.md, "subnet tag
+		// fixes".
 		body := `{
 			"cancellation": {
 				"ip": "123.123.123.123",
