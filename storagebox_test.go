@@ -657,3 +657,83 @@ func TestStorageBoxService_ResetSubAccountPassword_Custom(t *testing.T) {
 		t.Errorf("password: %q", pw)
 	}
 }
+
+// TestStorageBoxService_ErrorHandling verifies non-2xx responses surface as
+// errors across the service's verbs (GET/POST/DELETE) and return shapes. It is
+// not wrapped with spectest.Handler because the error bodies are generic, not
+// per-operation response fixtures.
+func TestStorageBoxService_ErrorHandling(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		call       func(*Client, context.Context) error
+	}{
+		{"List error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.List(ctx)
+			return err
+		}},
+		{"Get not found", http.StatusNotFound, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.Get(ctx, 42)
+			return err
+		}},
+		{"Update unauthorized", http.StatusUnauthorized, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.Update(ctx, 42, StorageBoxUpdate{})
+			return err
+		}},
+		{"ResetPassword error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.ResetPassword(ctx, 42, "new-pass")
+			return err
+		}},
+		{"ListSnapshots error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.ListSnapshots(ctx, 42)
+			return err
+		}},
+		{"CreateSnapshot error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.CreateSnapshot(ctx, 42)
+			return err
+		}},
+		{"DeleteSnapshot error", http.StatusNotFound, func(c *Client, ctx context.Context) error {
+			return c.StorageBox.DeleteSnapshot(ctx, 42, "snap1")
+		}},
+		{"GetSnapshotPlan error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.GetSnapshotPlan(ctx, 42)
+			return err
+		}},
+		{"SetSnapshotPlan error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.SetSnapshotPlan(ctx, 42, StorageBoxSnapshotPlan{})
+			return err
+		}},
+		{"ListSubAccounts error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.ListSubAccounts(ctx, 42)
+			return err
+		}},
+		{"CreateSubAccount error", http.StatusInternalServerError, func(c *Client, ctx context.Context) error {
+			_, err := c.StorageBox.CreateSubAccount(ctx, 42, StorageBoxSubAccountInput{})
+			return err
+		}},
+		{"DeleteSubAccount not found", http.StatusNotFound, func(c *Client, ctx context.Context) error {
+			return c.StorageBox.DeleteSubAccount(ctx, 42, "user1")
+		}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(tt.statusCode)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error": map[string]any{
+						"status":  tt.statusCode,
+						"code":    "ERROR",
+						"message": "test error",
+					},
+				})
+			}))
+			defer server.Close()
+
+			client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+			if err := tt.call(client, context.Background()); err == nil {
+				t.Errorf("expected error, got nil")
+			}
+		})
+	}
+}
