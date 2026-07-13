@@ -301,6 +301,9 @@ func TestKeyService_List_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty slice, got %d items", len(got))
 	}

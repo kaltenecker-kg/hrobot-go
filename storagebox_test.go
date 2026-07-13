@@ -674,6 +674,9 @@ func TestStorageBoxService_List_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("List returned error: %v", err)
 	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty slice, got %d items", len(got))
 	}
@@ -696,6 +699,9 @@ func TestStorageBoxService_ListSnapshots_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListSnapshots returned error: %v", err)
 	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
+	}
 	if len(got) != 0 {
 		t.Errorf("expected empty slice, got %d items", len(got))
 	}
@@ -717,6 +723,9 @@ func TestStorageBoxService_ListSubAccounts_Empty(t *testing.T) {
 	got, err := client.StorageBox.ListSubAccounts(context.Background(), 42)
 	if err != nil {
 		t.Fatalf("ListSubAccounts returned error: %v", err)
+	}
+	if got == nil {
+		t.Error("expected a non-nil empty slice, got nil")
 	}
 	if len(got) != 0 {
 		t.Errorf("expected empty slice, got %d items", len(got))
