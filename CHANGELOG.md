@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0 (2026-07-16)
+
+FEATURES:
+
+- **firewall**: Add `FirewallRules.Equivalent` for comparing rulesets across the API's undocumented normalization.
+  The Robot API has been observed to return rules posted without an `ip_version` expanded into separate ipv4 and
+  ipv6 entries; `Equivalent` treats a ruleset and its expansion as equal by comparing the ordered per-version
+  projections. `Get` and `Update` now document this behavior
+
 ## 2.0.1 (2026-07-13)
 
 BUG FIXES:
