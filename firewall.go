@@ -78,6 +78,56 @@ type FirewallRules struct {
 	Output []FirewallRule `json:"output"`
 }
 
+// appliesTo reports whether the rule matches traffic of the given IP version.
+// A rule without an IP version applies to both versions.
+func (r FirewallRule) appliesTo(v IPVersion) bool {
+	return r.IPVersion == "" || r.IPVersion == v
+}
+
+// projectRules returns the ordered rules applicable to the given IP version,
+// with IPVersion cleared so a version-less rule compares equal to its
+// per-version expansion.
+func projectRules(rules []FirewallRule, v IPVersion) []FirewallRule {
+	var out []FirewallRule
+	for _, r := range rules {
+		if r.appliesTo(v) {
+			r.IPVersion = ""
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// rulesEquivalent reports whether two ordered rule lists filter traffic
+// identically, by comparing their IPv4 and IPv6 projections.
+func rulesEquivalent(a, b []FirewallRule) bool {
+	for _, v := range []IPVersion{IPv4, IPv6} {
+		pa, pb := projectRules(a, v), projectRules(b, v)
+		if len(pa) != len(pb) {
+			return false
+		}
+		for i := range pa {
+			if pa[i] != pb[i] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// Equivalent reports whether both rulesets filter traffic identically.
+//
+// The API may return a normalized form of a posted ruleset: rules submitted
+// without an IP version have been observed to come back expanded into
+// separate ipv4 and ipv6 entries (the API doc does not specify a canonical
+// returned form). Equivalent treats such expansions as equal by comparing,
+// per IP version, the ordered sequence of rules that apply to that version.
+// Rule order within a version is significant; rules are compared field by
+// field otherwise.
+func (r FirewallRules) Equivalent(other FirewallRules) bool {
+	return rulesEquivalent(r.Input, other.Input) && rulesEquivalent(r.Output, other.Output)
+}
+
 // validateInputRuleCount enforces the inbound rule limit, returning a
 // validation error with code FIREWALL_RULE_LIMIT_EXCEEDED when the number of
 // input rules exceeds maxInput.
@@ -93,6 +143,9 @@ func validateInputRuleCount(rules FirewallRules, maxInput int) error {
 }
 
 // Get retrieves the firewall configuration for a server.
+//
+// The returned rules may be a normalized form of what was last posted; see
+// FirewallRules.Equivalent for comparing rulesets across that normalization.
 func (f *FirewallService) Get(ctx context.Context, serverID ServerID) (*FirewallConfig, error) {
 	var config FirewallConfig
 	path := fmt.Sprintf("/firewall/%s", serverID.String())
@@ -114,6 +167,10 @@ type UpdateConfig struct {
 
 // Update updates the firewall configuration for a server.
 // Only non-nil fields in config are sent to the API.
+//
+// The rules echoed in the response (and by later Get calls) may be a
+// normalized form of the posted rules; see FirewallRules.Equivalent for
+// comparing rulesets across that normalization.
 func (f *FirewallService) Update(ctx context.Context, serverID ServerID, config UpdateConfig) (*FirewallConfig, error) {
 	if err := f.ValidateRules(config.Rules); err != nil {
 		return nil, err

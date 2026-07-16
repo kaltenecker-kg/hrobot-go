@@ -1285,3 +1285,122 @@ func TestFirewallService_ErrorHandling(t *testing.T) {
 		})
 	}
 }
+
+func TestFirewallRules_Equivalent(t *testing.T) {
+	sshIn := FirewallRule{
+		Name:      "ssh",
+		IPVersion: IPv4,
+		Action:    ActionAccept,
+		Protocol:  ProtocolTCP,
+		DestPort:  "22",
+	}
+	mail25 := FirewallRule{
+		Name:     "block mail",
+		Action:   ActionDiscard,
+		Protocol: ProtocolTCP,
+		DestPort: "25",
+	}
+	mail465 := FirewallRule{
+		Name:     "block mail",
+		Action:   ActionDiscard,
+		Protocol: ProtocolTCP,
+		DestPort: "465",
+	}
+	allowAll := FirewallRule{
+		Name:   "Allow all",
+		Action: ActionAccept,
+	}
+
+	withVersion := func(r FirewallRule, v IPVersion) FirewallRule {
+		r.IPVersion = v
+		return r
+	}
+
+	tests := []struct {
+		name string
+		a    FirewallRules
+		b    FirewallRules
+		want bool
+	}{
+		{
+			name: "identical rulesets",
+			a: FirewallRules{
+				Input:  []FirewallRule{sshIn},
+				Output: []FirewallRule{mail25, allowAll},
+			},
+			b: FirewallRules{
+				Input:  []FirewallRule{sshIn},
+				Output: []FirewallRule{mail25, allowAll},
+			},
+			want: true,
+		},
+		{
+			name: "version-less rule equals adjacent ipv4+ipv6 pair",
+			a:    FirewallRules{Output: []FirewallRule{mail25, allowAll}},
+			b: FirewallRules{Output: []FirewallRule{
+				withVersion(mail25, IPv4),
+				withVersion(mail25, IPv6),
+				allowAll,
+			}},
+			want: true,
+		},
+		{
+			name: "version-less rules equal version-grouped expansion",
+			a:    FirewallRules{Output: []FirewallRule{mail25, mail465}},
+			b: FirewallRules{Output: []FirewallRule{
+				withVersion(mail25, IPv4),
+				withVersion(mail465, IPv4),
+				withVersion(mail25, IPv6),
+				withVersion(mail465, IPv6),
+			}},
+			want: true,
+		},
+		{
+			name: "reordering within a version is not equivalent",
+			a:    FirewallRules{Output: []FirewallRule{mail25, allowAll}},
+			b:    FirewallRules{Output: []FirewallRule{allowAll, mail25}},
+			want: false,
+		},
+		{
+			name: "differing field is not equivalent",
+			a:    FirewallRules{Output: []FirewallRule{mail25}},
+			b:    FirewallRules{Output: []FirewallRule{mail465}},
+			want: false,
+		},
+		{
+			name: "expansion for one version only is not equivalent",
+			a:    FirewallRules{Output: []FirewallRule{mail25}},
+			b:    FirewallRules{Output: []FirewallRule{withVersion(mail25, IPv4)}},
+			want: false,
+		},
+		{
+			name: "missing rule is not equivalent",
+			a:    FirewallRules{Output: []FirewallRule{mail25, allowAll}},
+			b:    FirewallRules{Output: []FirewallRule{mail25}},
+			want: false,
+		},
+		{
+			name: "empty and nil rule lists are equivalent",
+			a:    FirewallRules{Input: []FirewallRule{}, Output: nil},
+			b:    FirewallRules{Input: nil, Output: []FirewallRule{}},
+			want: true,
+		},
+		{
+			name: "input rules are compared independently of output rules",
+			a:    FirewallRules{Input: []FirewallRule{sshIn}},
+			b:    FirewallRules{Output: []FirewallRule{sshIn}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.a.Equivalent(tt.b); got != tt.want {
+				t.Errorf("a.Equivalent(b) = %v, want %v", got, tt.want)
+			}
+			if got := tt.b.Equivalent(tt.a); got != tt.want {
+				t.Errorf("b.Equivalent(a) = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
