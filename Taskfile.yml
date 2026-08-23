@@ -10,7 +10,20 @@ vars:
 
 tasks:
   default:
-    deps: [fmt, lint, vet, test]
+    desc: List the available tasks.
+    silent: true
+    cmds:
+      - task --list
+
+  all:
+    desc: Format, lint, vet, and test.
+    # Sequential, not `deps:` — Task runs deps concurrently and golangci-lint
+    # refuses to run twice at once ("parallel golangci-lint is running").
+    cmds:
+      - task: fmt
+      - task: lint
+      - task: vet
+      - task: test
 
   fmt:
     desc: Format Go files.
@@ -50,7 +63,6 @@ tasks:
 
   release:
     desc: Verify, tag v<Version>, and push to trigger the release workflow.
-    deps: [lint, vet, test]
     preconditions:
       - sh: '[ -n "{{.VERSION}}" ]'
         msg: "could not derive Version from client.go"
@@ -63,6 +75,13 @@ tasks:
       - sh: '! git rev-parse "v{{.VERSION}}" >/dev/null 2>&1'
         msg: "tag v{{.VERSION}} already exists"
     cmds:
+      # Checks run here rather than as `deps:` so they are sequential (deps are
+      # concurrent) and so they run after the preconditions, not alongside them.
+      # `all` is deliberately not reused: its `fmt` step rewrites files, which
+      # would dirty the tree the clean-tree precondition just verified.
+      - task: lint
+      - task: vet
+      - task: test
       - git tag -a "v{{.VERSION}}" -m "v{{.VERSION}}"
       - git push origin "v{{.VERSION}}"
       - echo "pushed v{{.VERSION}}; the release workflow will publish the GitHub Release"
