@@ -2,11 +2,48 @@ name: Tests
 
 on:
   pull_request:
+    paths-ignore:
+      # Documentation and local-tooling files that no CI job reads. Listed as
+      # paths-ignore rather than paths so an unrecognised new file still runs
+      # the jobs — the safe direction to be wrong in.
+      #
+      # Deliberately absent: spec/robot.yaml (loaded from disk at test time by
+      # spectest.Load, so it is a test input despite not being compiled),
+      # .golangci.yml (the Build job lints), go.mod/go.sum, and
+      # .github/workflows/** (a CI change must exercise CI).
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.markdownlint-cli2.jsonc'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      # CI inlines its own go/golangci-lint commands and never invokes these.
+      - 'GNUmakefile'
+      - 'Taskfile.yml'
+      - '.husky/**'
+      - '.github/CODEOWNERS'
+      - '.github/dependabot.yml'
+      - '.github/renovate.json'
   # Only on main; pushes to a PR branch are already covered by the pull_request
   # trigger, so restricting this avoids running every job twice per push.
   push:
     branches:
       - main
+    paths-ignore:
+      # Kept in sync with the list above by hand; Actions has no YAML anchors.
+      - '**.md'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.markdownlint-cli2.jsonc'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      # CI inlines its own go/golangci-lint commands and never invokes these.
+      - 'GNUmakefile'
+      - 'Taskfile.yml'
+      - '.husky/**'
+      - '.github/CODEOWNERS'
+      - '.github/dependabot.yml'
+      - '.github/renovate.json'
 
 permissions:
   contents: read
@@ -52,25 +89,6 @@ jobs:
           cache: true
       - run: go mod download
       - run: go test -v -race -cover -timeout=180s ./...
-
-  markdown:
-    name: Markdown Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          # markdownlint-cli2 requires Node >= 22 (see package.json engines).
-          node-version: '22'
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # Runs the exact command from the local pre-commit hook, driven entirely
-      # by .markdownlint-cli2.jsonc (rules + globs), so CI and local stay in
-      # sync — including the docs/**/*.md glob.
-      - name: Lint markdown
-        run: pnpm lint:md
 
   quality:
     name: Module Quality
