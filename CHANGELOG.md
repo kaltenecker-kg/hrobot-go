@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+FEATURES:
+
+- **firewall**: Add `Firewall.ActivateWithRules` and `Firewall.DisableWithRules`, which flip the firewall status
+  while applying a ruleset supplied by the caller. `POST /firewall/{server-id}` replaces the whole configuration, so
+  `Activate`/`Disable` have to re-post whatever `Get` returned — including the API's internal rules, which the API
+  then prepends again, accumulating a duplicate copy per call. Both new methods still carry `whitelist_hos` and
+  `filter_ipv6` over from the current configuration
+- **firewall**: Add `ServerInjectedRules(posted, returned)` for identifying the rules the API adds to a posted
+  ruleset, and `FirewallRules.Without(remove)` for stripping them from a configuration read back with `Get`. The
+  Robot API prepends mandatory internal rules (such as the outgoing block on mail ports 25 and 465) but marks them
+  in no way — the documented rule object has no `locked` field — and enforcement is per account, since Hetzner
+  lifts the mail-port block on request. Matching against a fixed rule shape would therefore delete a rule the caller
+  authored on an account where the block was lifted, so the pair identifies internal rules differentially instead.
+  Together with `Equivalent` they let a reconcile loop converge, which comparing `Get` output against a desired
+  ruleset directly cannot do
+
+IMPROVEMENTS:
+
+- **firewall**: `Activate` and `Disable` now document that they accumulate the API's internal rules on repeated
+  calls, and point at the `WithRules` variants
+
 ## 2.1.0 (2026-07-16)
 
 FEATURES:

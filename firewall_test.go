@@ -131,13 +131,30 @@ func firewallDocRules() []map[string]any {
 // rules[input][idx][*] keys/values matching the given doc-shaped rule.
 func assertInputRuleForm(t *testing.T, r *http.Request, idx int, rule map[string]any) {
 	t.Helper()
+	assertRuleForm(t, r, "input", idx, rule)
+}
+
+// assertRuleForm asserts that the posted form contains the
+// rules[direction][idx][*] keys/values matching the given doc-shaped rule.
+func assertRuleForm(t *testing.T, r *http.Request, direction string, idx int, rule map[string]any) {
+	t.Helper()
 	for key, value := range rule {
-		formKey := fmt.Sprintf("rules[input][%d][%s]", idx, key)
+		formKey := fmt.Sprintf("rules[%s][%d][%s]", direction, idx, key)
 		got := r.FormValue(formKey)
 		want := fmt.Sprintf("%v", value)
 		if got != want {
 			t.Errorf("expected form key %q to be %q, got %q", formKey, want, got)
 		}
+	}
+}
+
+// assertNoRuleForm asserts that the posted form carries no rule at
+// rules[direction][idx], so a ruleset is not silently padded.
+func assertNoRuleForm(t *testing.T, r *http.Request, direction string, idx int) {
+	t.Helper()
+	formKey := fmt.Sprintf("rules[%s][%d][action]", direction, idx)
+	if got := r.FormValue(formKey); got != "" {
+		t.Errorf("expected no rule at %s[%d], got form key %q = %q", direction, idx, formKey, got)
 	}
 }
 
@@ -1402,5 +1419,475 @@ func TestFirewallRules_Equivalent(t *testing.T) {
 				t.Errorf("b.Equivalent(a) = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// hetznerMailBlock returns the outgoing rule Hetzner enforces for accounts
+// whose mail ports are not unblocked, in the given IP version. The API
+// prepends this pair to every accepted configuration but marks it in no way,
+// which is what ServerInjectedRules exists to work around.
+func hetznerMailBlock(v IPVersion) FirewallRule {
+	return FirewallRule{
+		Name:      "Block mail ports",
+		IPVersion: v,
+		Action:    ActionDiscard,
+		Protocol:  ProtocolTCP,
+		DestPort:  "25,465",
+	}
+}
+
+// assertRuleSlice compares two rule slices element by element.
+func assertRuleSlice(t *testing.T, direction string, got, want []FirewallRule) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Errorf("%s: got %d rules %+v, want %d", direction, len(got), got, len(want))
+		return
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("%s[%d] = %+v, want %+v", direction, i, got[i], want[i])
+		}
+	}
+}
+
+func TestServerInjectedRules(t *testing.T) {
+	mailV4, mailV6 := hetznerMailBlock(IPv4), hetznerMailBlock(IPv6)
+	dns := FirewallRule{
+		Name:      "dns",
+		IPVersion: IPv4,
+		Action:    ActionAccept,
+		Protocol:  ProtocolUDP,
+		DestPort:  "53",
+	}
+	allowAll := FirewallRule{Name: "Allow all", Action: ActionAccept}
+	ssh := FirewallRule{
+		Name:      "ssh",
+		IPVersion: IPv4,
+		Action:    ActionAccept,
+		Protocol:  ProtocolTCP,
+		DestPort:  "22",
+	}
+
+	withVersion := func(r FirewallRule, v IPVersion) FirewallRule {
+		r.IPVersion = v
+		return r
+	}
+
+	tests := []struct {
+		name     string
+		posted   FirewallRules
+		returned FirewallRules
+		want     FirewallRules
+	}{
+		{
+			name:     "enforced mail block is reported as injected",
+			posted:   FirewallRules{Output: []FirewallRule{dns, allowAll}},
+			returned: FirewallRules{Output: []FirewallRule{mailV4, mailV6, dns, allowAll}},
+			want:     FirewallRules{Output: []FirewallRule{mailV4, mailV6}},
+		},
+		{
+			// Hetzner unblocks the mail ports on request, in which case
+			// nothing is prepended and nothing may be reported.
+			name:     "lifted mail block reports nothing",
+			posted:   FirewallRules{Output: []FirewallRule{dns, allowAll}},
+			returned: FirewallRules{Output: []FirewallRule{dns, allowAll}},
+			want:     FirewallRules{},
+		},
+		{
+			// The caller's own block-mail rule is indistinguishable from the
+			// enforced one by shape, so only the diff keeps it.
+			name:     "caller's own mail block is not reported",
+			posted:   FirewallRules{Output: []FirewallRule{mailV4, allowAll}},
+			returned: FirewallRules{Output: []FirewallRule{mailV4, allowAll}},
+			want:     FirewallRules{},
+		},
+		{
+			// What Activate does: the ruleset read back from Get is posted
+			// again, so the API prepends a second copy of its own rules.
+			name:     "re-posted internal rules are reported as duplicates",
+			posted:   FirewallRules{Output: []FirewallRule{mailV4, mailV6, dns}},
+			returned: FirewallRules{Output: []FirewallRule{mailV4, mailV6, mailV4, mailV6, dns}},
+			want:     FirewallRules{Output: []FirewallRule{mailV4, mailV6}},
+		},
+		{
+			name:   "version-less posted rule accounts for its expansion",
+			posted: FirewallRules{Output: []FirewallRule{allowAll}},
+			returned: FirewallRules{Output: []FirewallRule{
+				withVersion(allowAll, IPv4),
+				withVersion(allowAll, IPv6),
+			}},
+			want: FirewallRules{},
+		},
+		{
+			// Conservative by design: a returned rule that is accounted for
+			// in one of the versions it applies to is not claimed as
+			// injected, so stripping it can never drop a caller's rule.
+			name:     "rule accounted for in one version only is not reported",
+			posted:   FirewallRules{Output: []FirewallRule{withVersion(allowAll, IPv4)}},
+			returned: FirewallRules{Output: []FirewallRule{allowAll}},
+			want:     FirewallRules{},
+		},
+		{
+			name:     "injected input rule is reported",
+			posted:   FirewallRules{Input: []FirewallRule{ssh}},
+			returned: FirewallRules{Input: []FirewallRule{ssh, dns}},
+			want:     FirewallRules{Input: []FirewallRule{dns}},
+		},
+		{
+			name:     "input and output are diffed independently",
+			posted:   FirewallRules{Input: []FirewallRule{ssh}},
+			returned: FirewallRules{Input: []FirewallRule{ssh}, Output: []FirewallRule{mailV4}},
+			want:     FirewallRules{Output: []FirewallRule{mailV4}},
+		},
+		{
+			name:     "nothing posted reports the whole returned ruleset",
+			posted:   FirewallRules{},
+			returned: FirewallRules{Output: []FirewallRule{mailV4, mailV6}},
+			want:     FirewallRules{Output: []FirewallRule{mailV4, mailV6}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ServerInjectedRules(tt.posted, tt.returned)
+			assertRuleSlice(t, "input", got.Input, tt.want.Input)
+			assertRuleSlice(t, "output", got.Output, tt.want.Output)
+		})
+	}
+}
+
+func TestFirewallRules_Without(t *testing.T) {
+	mailV4, mailV6 := hetznerMailBlock(IPv4), hetznerMailBlock(IPv6)
+	dns := FirewallRule{
+		Name:      "dns",
+		IPVersion: IPv4,
+		Action:    ActionAccept,
+		Protocol:  ProtocolUDP,
+		DestPort:  "53",
+	}
+	allowAll := FirewallRule{Name: "Allow all", Action: ActionAccept}
+
+	tests := []struct {
+		name   string
+		rules  FirewallRules
+		remove FirewallRules
+		want   FirewallRules
+	}{
+		{
+			name:   "injected prefix is stripped",
+			rules:  FirewallRules{Output: []FirewallRule{mailV4, mailV6, dns, allowAll}},
+			remove: FirewallRules{Output: []FirewallRule{mailV4, mailV6}},
+			want:   FirewallRules{Output: []FirewallRule{dns, allowAll}},
+		},
+		{
+			// Multiplicity matters: stripping one injected copy must leave
+			// the caller's identical rule in place.
+			name:   "only one copy of a duplicated rule is removed",
+			rules:  FirewallRules{Output: []FirewallRule{mailV4, mailV4, allowAll}},
+			remove: FirewallRules{Output: []FirewallRule{mailV4}},
+			want:   FirewallRules{Output: []FirewallRule{mailV4, allowAll}},
+		},
+		{
+			name:   "removing an absent rule is a no-op",
+			rules:  FirewallRules{Output: []FirewallRule{dns, allowAll}},
+			remove: FirewallRules{Output: []FirewallRule{mailV4}},
+			want:   FirewallRules{Output: []FirewallRule{dns, allowAll}},
+		},
+		{
+			name:   "removing nothing keeps the ruleset",
+			rules:  FirewallRules{Output: []FirewallRule{dns, allowAll}},
+			remove: FirewallRules{},
+			want:   FirewallRules{Output: []FirewallRule{dns, allowAll}},
+		},
+		{
+			name:   "directions are stripped independently",
+			rules:  FirewallRules{Input: []FirewallRule{dns}, Output: []FirewallRule{dns}},
+			remove: FirewallRules{Output: []FirewallRule{dns}},
+			want:   FirewallRules{Input: []FirewallRule{dns}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.rules.Without(tt.remove)
+			assertRuleSlice(t, "input", got.Input, tt.want.Input)
+			assertRuleSlice(t, "output", got.Output, tt.want.Output)
+		})
+	}
+}
+
+// TestFirewallRules_ReconcileLoopConverges exercises the intended flow end to
+// end: capture what the API injected once, then strip it from later reads so
+// a desired ruleset compares equal instead of drifting forever.
+func TestFirewallRules_ReconcileLoopConverges(t *testing.T) {
+	mailV4, mailV6 := hetznerMailBlock(IPv4), hetznerMailBlock(IPv6)
+	desired := FirewallRules{
+		Output: []FirewallRule{
+			{Name: "dns", IPVersion: IPv4, Action: ActionAccept, Protocol: ProtocolUDP, DestPort: "53"},
+			{Name: "Allow all", Action: ActionAccept},
+		},
+	}
+
+	applied := FirewallRules{Output: append([]FirewallRule{mailV4, mailV6}, desired.Output...)}
+
+	if applied.Equivalent(desired) {
+		t.Fatal("applied ruleset must not compare equal to desired while internal rules are present")
+	}
+
+	injected := ServerInjectedRules(desired, applied)
+	if !injected.Equivalent(FirewallRules{Output: []FirewallRule{mailV4, mailV6}}) {
+		t.Fatalf("unexpected injected ruleset: %+v", injected)
+	}
+
+	// A later Get returns the same configuration; stripping the injected
+	// rules must now converge.
+	if !applied.Without(injected).Equivalent(desired) {
+		t.Errorf("reconcile did not converge: %+v", applied.Without(injected))
+	}
+}
+
+// TestFirewallService_ActivateWithRules covers the reason the method exists:
+// the ruleset returned by Get carries the API's internal rules, and posting
+// those back is what makes them accumulate. ActivateWithRules must send the
+// caller's ruleset instead.
+func TestFirewallService_ActivateWithRules(t *testing.T) {
+	// Doc-shaped JSON for the mail-port block the API enforces on the
+	// outgoing chain, in both IP versions.
+	mailBlockJSON := func(version string) map[string]any {
+		return map[string]any{
+			"name":       "Block mail ports",
+			"ip_version": version,
+			"action":     "discard",
+			"protocol":   "tcp",
+			"dst_port":   "25,465",
+		}
+	}
+	allowAllJSON := map[string]any{"name": "Allow all", "action": "accept"}
+
+	getCalled := false
+	postCalled := false
+
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/firewall/321" {
+			t.Errorf("expected path '/firewall/321', got '%s'", r.URL.Path)
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			getCalled = true
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "disabled",
+					"whitelist_hos": true,
+					"filter_ipv6":   false,
+					"port":          "main",
+					"rules": map[string]any{
+						// The API reports its internal rules exactly like any
+						// other rule, with no marker distinguishing them.
+						"input": firewallDocRules(),
+						"output": []map[string]any{
+							mailBlockJSON("ipv4"),
+							mailBlockJSON("ipv6"),
+							allowAllJSON,
+						},
+					},
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		case http.MethodPost:
+			postCalled = true
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("failed to parse form: %v", err)
+			}
+
+			if r.FormValue("status") != "active" {
+				t.Errorf("expected status 'active', got '%s'", r.FormValue("status"))
+			}
+			// whitelist_hos and filter_ipv6 still come from the current
+			// configuration, since omitting them would reset them.
+			if r.FormValue("whitelist_hos") != "true" {
+				t.Errorf("expected whitelist_hos 'true', got '%s'", r.FormValue("whitelist_hos"))
+			}
+			if r.FormValue("filter_ipv6") != "false" {
+				t.Errorf("expected filter_ipv6 'false', got '%s'", r.FormValue("filter_ipv6"))
+			}
+
+			assertRuleForm(t, r, "input", 0, map[string]any{
+				"name":       "allow ssh",
+				"ip_version": "ipv4",
+				"action":     "accept",
+				"protocol":   "tcp",
+				"dst_port":   "22",
+			})
+			assertNoRuleForm(t, r, "input", 1)
+
+			assertRuleForm(t, r, "output", 0, allowAllJSON)
+			// The decisive assertion: the internal rules that GET reported
+			// must not be posted back.
+			assertNoRuleForm(t, r, "output", 1)
+
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "active",
+					"whitelist_hos": true,
+					"filter_ipv6":   false,
+					"port":          "main",
+					"rules": map[string]any{
+						"input": []map[string]any{{
+							"name":       "allow ssh",
+							"ip_version": "ipv4",
+							"action":     "accept",
+							"protocol":   "tcp",
+							"dst_port":   "22",
+						}},
+						// The API prepends its internal rules again.
+						"output": []map[string]any{
+							mailBlockJSON("ipv4"),
+							mailBlockJSON("ipv6"),
+							allowAllJSON,
+						},
+					},
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		default:
+			t.Errorf("expected GET or POST request, got '%s'", r.Method)
+		}
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+
+	desired := FirewallRules{
+		Input: []FirewallRule{{
+			Name:      "allow ssh",
+			IPVersion: IPv4,
+			Action:    ActionAccept,
+			Protocol:  ProtocolTCP,
+			DestPort:  "22",
+		}},
+		Output: []FirewallRule{{Name: "Allow all", Action: ActionAccept}},
+	}
+
+	config, err := client.Firewall.ActivateWithRules(ctx, ServerID(321), desired)
+	if err != nil {
+		t.Fatalf("Firewall.ActivateWithRules returned error: %v", err)
+	}
+
+	if !getCalled {
+		t.Error("expected GET request to be made for whitelist_hos/filter_ipv6")
+	}
+	if !postCalled {
+		t.Error("expected POST request to be made")
+	}
+	if config.Status != FirewallStatusActive {
+		t.Errorf("expected status 'active', got '%s'", config.Status)
+	}
+
+	// The applied configuration differs from the desired one only by what the
+	// API injected, which the caller can now identify and strip.
+	injected := ServerInjectedRules(desired, config.Rules)
+	assertRuleSlice(t, "injected output", injected.Output, []FirewallRule{
+		hetznerMailBlock(IPv4),
+		hetznerMailBlock(IPv6),
+	})
+	assertRuleSlice(t, "injected input", injected.Input, nil)
+	if !config.Rules.Without(injected).Equivalent(desired) {
+		t.Errorf("stripping injected rules did not yield the desired ruleset: %+v", config.Rules.Without(injected))
+	}
+}
+
+// TestFirewallService_DisableWithRules asserts the disable path posts the
+// caller's ruleset rather than the one Get returned.
+func TestFirewallService_DisableWithRules(t *testing.T) {
+	postCalled := false
+
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rules := map[string]any{
+			"input":  []map[string]any{},
+			"output": []map[string]any{{"name": "Allow all", "action": "accept"}},
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "active",
+					"whitelist_hos": false,
+					"filter_ipv6":   true,
+					"port":          "main",
+					"rules": map[string]any{
+						"input":  firewallDocRules(),
+						"output": []map[string]any{},
+					},
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		case http.MethodPost:
+			postCalled = true
+			if err := r.ParseForm(); err != nil {
+				t.Fatalf("failed to parse form: %v", err)
+			}
+			if r.FormValue("status") != "disabled" {
+				t.Errorf("expected status 'disabled', got '%s'", r.FormValue("status"))
+			}
+			if r.FormValue("whitelist_hos") != "false" {
+				t.Errorf("expected whitelist_hos 'false', got '%s'", r.FormValue("whitelist_hos"))
+			}
+			if r.FormValue("filter_ipv6") != "true" {
+				t.Errorf("expected filter_ipv6 'true', got '%s'", r.FormValue("filter_ipv6"))
+			}
+			// The doc rules returned by GET must not be re-posted.
+			assertNoRuleForm(t, r, "input", 0)
+			assertRuleForm(t, r, "output", 0, map[string]any{"name": "Allow all", "action": "accept"})
+
+			response := map[string]any{
+				"firewall": map[string]any{
+					"server_ip":     "123.123.123.123",
+					"server_number": 321,
+					"status":        "disabled",
+					"whitelist_hos": false,
+					"filter_ipv6":   true,
+					"port":          "main",
+					"rules":         rules,
+				},
+			}
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				t.Fatalf("failed to encode response: %v", err)
+			}
+		default:
+			t.Errorf("expected GET or POST request, got '%s'", r.Method)
+		}
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+
+	desired := FirewallRules{Output: []FirewallRule{{Name: "Allow all", Action: ActionAccept}}}
+
+	config, err := client.Firewall.DisableWithRules(context.Background(), ServerID(321), desired)
+	if err != nil {
+		t.Fatalf("Firewall.DisableWithRules returned error: %v", err)
+	}
+	if !postCalled {
+		t.Error("expected POST request to be made")
+	}
+	if config.Status != FirewallStatusDisabled {
+		t.Errorf("expected status 'disabled', got '%s'", config.Status)
 	}
 }
