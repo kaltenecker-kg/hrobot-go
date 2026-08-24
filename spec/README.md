@@ -135,6 +135,37 @@ of `{"firewall": {...}}`.
 now wrapped with `spectest.Handler` (previously unwrapped for lack of a spec
 path).
 
+#### Internal rules are unmodelled, and deliberately stay that way
+
+The Robot API prepends mandatory "internal" rules to every firewall
+configuration it accepts — for accounts whose mail ports are not unblocked,
+an outgoing `tcp dst_port 25,465 discard` pair in ipv4 and ipv6. The doc
+acknowledges they exist only through one error string,
+`FIREWALL_CANNOT_BE_DISABLED` ("The firewall cannot be disabled because
+internal rules are set"), and never in a schema: the Output tables for `GET`/`POST /firewall/{server-id}`
+list exactly nine per-rule fields (`ip_version`, `name`, `dst_ip`, `src_ip`,
+`dst_port`, `src_port`, `protocol`, `tcp_flags`, `action`), none of which flags
+enforcement. The Robot web UI greys these rules out, so the information exists
+server-side, but it is not on the webservice. `components.schemas.FirewallRule`
+was left matching the doc — adding a `locked` field would be inventing API
+surface.
+
+The consequence is a production bug this uncovered: because `GET` returns
+internal rules indistinguishably from the caller's own, `Activate`/`Disable`
+— which re-post the ruleset `Get` returned, since `POST` replaces the whole
+configuration — hand those rules back to the API, which prepends a fresh copy.
+Repeated calls grow the ruleset without bound, and on the input side that
+eventually trips `FIREWALL_RULE_LIMIT_EXCEEDED`.
+
+Identifying internal rules by matching a fixed shape was rejected: Hetzner
+lifts the mail-port block per account on request, so a hardcoded matcher would
+silently delete a genuine `Block mail ports` rule for exactly the accounts that
+had it unblocked. `ServerInjectedRules(posted, returned)` diffs a posted
+ruleset against the returned one instead, which self-calibrates — an empty
+result when nothing is enforced — and survives Hetzner changing which rules it
+injects. `Firewall.ActivateWithRules`/`DisableWithRules` exist so the status
+flip has a caller-supplied baseline rather than a blind read-modify-write.
+
 ### ip tag fixes
 
 Verified against the doc's `IP` section (`GET /ip`, `GET|POST /ip/{ip}`,
