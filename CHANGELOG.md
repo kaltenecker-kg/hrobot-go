@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+BUG FIXES:
+
+- **firewall**: `GetTemplate`, `UpdateTemplate`, and `DeleteTemplate` now pass the template ID through
+  `url.PathEscape` before building the request path, like every other string path parameter in the client. A
+  template ID containing reserved characters previously produced a malformed request path instead of reaching the
+  intended `/firewall/template/{id}` resource
+
 ## 2.2.0 (2026-08-24)
 
 FEATURES:

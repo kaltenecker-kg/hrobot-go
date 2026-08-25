@@ -500,7 +500,7 @@ func (f *FirewallService) ListTemplates(ctx context.Context) ([]FirewallTemplate
 // GetTemplate retrieves a firewall template.
 func (f *FirewallService) GetTemplate(ctx context.Context, templateID string) (*FirewallTemplate, error) {
 	var tmpl FirewallTemplate
-	path := fmt.Sprintf("/firewall/template/%s", templateID)
+	path := fmt.Sprintf("/firewall/template/%s", url.PathEscape(templateID))
 	if err := f.client.Get(ctx, path, &tmpl); err != nil {
 		return nil, err
 	}
@@ -528,7 +528,7 @@ func (f *FirewallService) UpdateTemplate(ctx context.Context, templateID string,
 		return nil, err
 	}
 
-	path := fmt.Sprintf("/firewall/template/%s", templateID)
+	path := fmt.Sprintf("/firewall/template/%s", url.PathEscape(templateID))
 
 	formData := f.encodeRules(config.Rules, templateExtras(config))
 
@@ -550,7 +550,7 @@ func templateExtras(config TemplateConfig) map[string]string {
 
 // DeleteTemplate deletes a firewall template.
 func (f *FirewallService) DeleteTemplate(ctx context.Context, templateID string) error {
-	path := fmt.Sprintf("/firewall/template/%s", templateID)
+	path := fmt.Sprintf("/firewall/template/%s", url.PathEscape(templateID))
 	return f.client.Delete(ctx, path)
 }
 
