@@ -567,14 +567,13 @@ func (f *FirewallService) WaitForFirewallReady(ctx context.Context, serverID Ser
 	})
 }
 
-// ApplyTemplate applies a firewall template to a server.
-// Note: The whitelist_hos setting comes from the template itself and cannot be overridden.
+// ApplyTemplate applies a firewall template to a server. The whitelist_hos
+// setting comes from the template itself and cannot be overridden.
 func (f *FirewallService) ApplyTemplate(ctx context.Context, serverID ServerID, templateID string) (*FirewallConfig, error) {
 	path := fmt.Sprintf("/firewall/%s", serverID.String())
 
 	data := url.Values{}
 	data.Set("template_id", templateID)
-	// Note: whitelist_hos cannot be passed with template_id according to API docs
 
 	var config FirewallConfig
 	err := f.client.Post(ctx, path, data, &config)

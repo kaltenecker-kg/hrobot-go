@@ -14,9 +14,8 @@
 //
 // # Why kin-openapi
 //
-// The package plan called for evaluating github.com/getkin/kin-openapi
-// against github.com/pb33f/libopenapi-validator. kin-openapi was chosen:
-// it exposes the request/response validation primitives
+// kin-openapi is used rather than github.com/pb33f/libopenapi-validator
+// because it exposes the request/response validation primitives
 // (openapi3filter.ValidateRequest / ValidateResponse) as composable
 // functions rather than only as a Go-context/gorilla middleware, which is
 // what lets this package validate directly against a *testing.T instead of

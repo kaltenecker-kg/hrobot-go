@@ -161,7 +161,7 @@ func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 
-		// Unknown string - don't fail, just preserve Raw and leave Bytes = 0
+		// Unknown string: don't fail, just preserve Raw and leave Bytes = 0.
 		return nil
 	}
 

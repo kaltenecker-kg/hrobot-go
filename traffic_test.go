@@ -181,7 +181,7 @@ func TestTrafficService_Get_NoSingleValues(t *testing.T) {
 			t.Errorf("expected to '2010-09-31', got '%s'", got)
 		}
 
-		// single_values must NOT be set when false
+		// single_values must not be set when false
 		if _, ok := r.Form["single_values"]; ok {
 			t.Errorf("expected single_values to be absent, got '%s'", r.FormValue("single_values"))
 		}

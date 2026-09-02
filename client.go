@@ -322,7 +322,7 @@ func unwrapResponse(data []byte) (json.RawMessage, error) {
 	switch data[0] {
 	case '[':
 		var arr []map[string]json.RawMessage
-		// Not an array of objects (e.g. array of scalars) → leave as-is.
+		// Not an array of objects (e.g. array of scalars), so leave as-is.
 		_ = json.Unmarshal(data, &arr)
 		if len(arr) == 0 {
 			return data, nil
