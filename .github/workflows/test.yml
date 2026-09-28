@@ -23,7 +23,6 @@ on:
       - '.husky/**'
       - '.github/CODEOWNERS'
       - '.github/dependabot.yml'
-      - '.github/renovate.json'
   # Only on main; pushes to a PR branch are already covered by the pull_request
   # trigger, so restricting this avoids running every job twice per push.
   push:
@@ -43,7 +42,6 @@ on:
       - '.husky/**'
       - '.github/CODEOWNERS'
       - '.github/dependabot.yml'
-      - '.github/renovate.json'
 
 permissions:
   contents: read
@@ -55,6 +53,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here pushes, so keep the GITHUB_TOKEN out of .git/config
+          # where later steps (and any tool they run) could read it.
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: 'go.mod'
@@ -70,6 +72,10 @@ jobs:
       - name: Run linters
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:
+          # `latest` rather than a pinned version: Dependabot cannot bump a
+          # version string in a `with:` block, and a pin nobody bumps just
+          # rots. The action itself is SHA-pinned, and the linter is a check,
+          # not a build input, so a surprise upgrade can only fail CI.
           version: latest
 
   test:
@@ -79,6 +85,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: 'go.mod'
@@ -96,6 +104,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: 'go.mod'
@@ -109,6 +119,9 @@ jobs:
       - name: go mod verify
         run: go mod verify
       - name: govulncheck
-        # Pinned by commit SHA for reproducibility (Renovate bumps it); the
-        # vulnerability database is still fetched fresh at run time.
-        run: go run golang.org/x/vuln/cmd/govulncheck@19b0bb6a272792b9afa8a6983c3e9b9a1816947f ./... # v1.6.0
+        # @latest on purpose: a scanner should be current, Dependabot cannot
+        # bump a version literal here, and the module proxy plus
+        # sum.golang.org verify whatever version resolves. Same command as
+        # `make vulncheck`; the vulnerability database is fetched fresh at
+        # run time.
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
