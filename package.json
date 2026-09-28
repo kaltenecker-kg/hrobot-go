@@ -7,8 +7,8 @@
     "lint:md": "markdownlint-cli2"
   },
   "devDependencies": {
-    "husky": "^9.1.7",
-    "markdownlint-cli2": "^0.23.2"
+    "husky": "9.1.7",
+    "markdownlint-cli2": "0.23.2"
   },
   "engines": {
     "node": ">=22"
