@@ -43,3 +43,6 @@ GEMINI.md
 
 # Node (husky tooling)
 node_modules/
+
+# Local snapshots of the upstream Hetzner doc, used to verify fixtures
+spec/upstream/
