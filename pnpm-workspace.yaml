@@ -1,0 +1,8 @@
+# pnpm settings for the dev-tooling package (husky + markdownlint-cli2). This
+# is not a multi-package workspace; the file only carries settings.
+
+# Refuse to resolve any npm package version published less than 7 days ago
+# (value in minutes). A compromised maintainer account typically publishes a
+# malicious release and it is pulled within days, so a cooling-off window
+# keeps a fresh backdoor out of `pnpm install`/`pnpm update`.
+minimumReleaseAge: 10080
