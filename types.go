@@ -99,6 +99,12 @@ type TrafficSize struct {
 	Raw       string
 }
 
+// trafficSizePattern matches the human-readable form the API uses for
+// traffic quotas: a number with an optional fraction, optional whitespace,
+// and a binary unit, case-insensitively (e.g. "5 TB", "500gb"). Compiled
+// once; a per-decode MustCompile would be paid for every server in a list.
+var trafficSizePattern = regexp.MustCompile(`(?i)^\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*$`)
+
 // UnmarshalJSON handles "unlimited" string, human-readable strings like "5 TB", and numeric values.
 func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 	// Reset so reused receivers do not retain values from a prior decode.
@@ -118,10 +124,8 @@ func (t *TrafficSize) UnmarshalJSON(data []byte) error {
 			return nil
 		}
 
-		// Try parsing as human-readable format: number + unit (case-insensitive)
-		// Pattern: ^\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*$
-		pattern := regexp.MustCompile(`(?i)^\s*([0-9]+(?:\.[0-9]+)?)\s*(B|KB|MB|GB|TB)\s*$`)
-		matches := pattern.FindStringSubmatch(str)
+		// Try parsing as human-readable format: number + unit (case-insensitive).
+		matches := trafficSizePattern.FindStringSubmatch(str)
 		if len(matches) == 3 {
 			numStr := matches[1]
 			unit := strings.ToUpper(matches[2])

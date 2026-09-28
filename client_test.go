@@ -3,10 +3,12 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -193,6 +195,20 @@ func TestClientOptions(t *testing.T) {
 		}
 	})
 
+	t.Run("WithMaxResponseBytes overrides default", func(t *testing.T) {
+		client := NewClient("user", "pass", WithMaxResponseBytes(4096))
+		if client.maxResponseBytes != 4096 {
+			t.Errorf("maxResponseBytes = %d, want 4096", client.maxResponseBytes)
+		}
+	})
+
+	t.Run("WithMaxResponseBytes ignores non-positive", func(t *testing.T) {
+		client := NewClient("user", "pass", WithMaxResponseBytes(-1))
+		if client.maxResponseBytes != DefaultMaxResponseBytes {
+			t.Errorf("maxResponseBytes = %d, want default %d", client.maxResponseBytes, DefaultMaxResponseBytes)
+		}
+	})
+
 	t.Run("WithEndpoint aliases WithBaseURL", func(t *testing.T) {
 		client := NewClient("user", "pass", WithEndpoint("https://custom.example.com/"))
 		expected := "https://custom.example.com"
@@ -304,6 +320,127 @@ func TestCredentialValidation(t *testing.T) {
 			t.Errorf("server received %d requests, want 1", n)
 		}
 	})
+}
+
+func TestBaseURLValidation(t *testing.T) {
+	rejected := []struct {
+		name, baseURL string
+	}{
+		{"unsupported scheme", "ftp://robot.example"},
+		{"missing scheme", "robot.example"},
+		{"missing host", "https://"},
+		{"embedded credentials", "https://user:pass@robot.example"},
+		{"query string", "https://robot.example/?x=1"},
+		{"fragment", "https://robot.example/#frag"},
+		{"unparseable", "https://robot.example/%zz"},
+	}
+	for _, tc := range rejected {
+		t.Run("rejects "+tc.name, func(t *testing.T) {
+			client := NewClient("user", "pass", WithBaseURL(tc.baseURL))
+			// No server is started: the request must fail before any HTTP
+			// call, so a transport error here would mean validation did not
+			// run.
+			err := client.Get(context.Background(), "/server", nil)
+			var e *Error
+			if !errors.As(err, &e) || e.Kind != ErrKindValidation || e.Code != ErrInvalidInput {
+				t.Fatalf("err = %v, want Validation[INVALID_INPUT]", err)
+			}
+		})
+	}
+
+	accepted := []string{
+		DefaultBaseURL,
+		"https://robot-ws.your-server.de/",
+		"http://127.0.0.1:8080",
+		"https://proxy.example/hetzner/robot/",
+	}
+	for _, baseURL := range accepted {
+		t.Run("accepts "+baseURL, func(t *testing.T) {
+			client := NewClient("user", "pass", WithBaseURL(baseURL))
+			if client.baseURLErr != nil {
+				t.Fatalf("baseURLErr = %v, want nil", client.baseURLErr)
+			}
+		})
+	}
+}
+
+func TestHandleResponse_BodyTooLarge(t *testing.T) {
+	const limit = 1024
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"server":{"pad":"` + strings.Repeat("x", 2*limit) + `"}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("user", "pass", WithBaseURL(server.URL), WithMaxResponseBytes(limit))
+	var out map[string]any
+	err := client.Get(context.Background(), "/server", &out)
+	var e *Error
+	if !errors.As(err, &e) || e.Kind != ErrKindParse {
+		t.Fatalf("err = %v, want a Parse error", err)
+	}
+	if !strings.Contains(e.Message, "WithMaxResponseBytes") {
+		t.Errorf("Message = %q, want it to point at WithMaxResponseBytes", e.Message)
+	}
+	if out != nil {
+		t.Errorf("out = %v, want nothing decoded from an oversized body", out)
+	}
+}
+
+func TestHandleResponse_BodyAtLimitIsAccepted(t *testing.T) {
+	body := `{"server":{"pad":"` + strings.Repeat("x", 100) + `"}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	// A body of exactly the limit must pass: the cap is inclusive.
+	client := NewClient("user", "pass", WithBaseURL(server.URL), WithMaxResponseBytes(int64(len(body))))
+	var out map[string]any
+	if err := client.Get(context.Background(), "/server", &out); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(out["pad"].(string)) != 100 { //nolint:forcetypeassert // fixture-controlled shape
+		t.Errorf("decoded pad = %v, want the 100-byte fixture", out["pad"])
+	}
+}
+
+func TestHandleResponse_NonSuccessStatusIsError(t *testing.T) {
+	client := NewClient("user", "pass")
+	for _, status := range []int{http.StatusContinue, http.StatusMovedPermanently, http.StatusFound, http.StatusNotModified} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			resp := &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(""))}
+			err := client.handleResponse(context.Background(), resp, nil)
+			var e *Error
+			if !errors.As(err, &e) {
+				t.Fatalf("err = %v, want *Error for a non-2xx status", err)
+			}
+			if e.Kind != ErrKindAPI || e.Code != ErrUnknown || e.Status != status {
+				t.Errorf("got Kind=%s Code=%s Status=%d, want API/UNKNOWN/%d", e.Kind, e.Code, e.Status, status)
+			}
+		})
+	}
+}
+
+func TestErrorFromResponse_TruncatesLongBody(t *testing.T) {
+	body := []byte("<html>" + strings.Repeat("A", 4*maxErrorBodyBytes) + "</html>")
+	err := errorFromResponse(http.StatusBadGateway, body)
+	var e *Error
+	if !errors.As(err, &e) {
+		t.Fatalf("expected *Error, got %T", err)
+	}
+	if !strings.Contains(e.Message, "HTTP 502") {
+		t.Errorf("Message = %q, want it to carry the status", e.Message)
+	}
+	if !strings.Contains(e.Message, "bytes truncated)") {
+		t.Errorf("Message = %q, want a truncation marker", e.Message)
+	}
+	// Status prefix + capped body + marker: anything much longer means the
+	// cap was not applied.
+	if len(e.Message) > maxErrorBodyBytes+64 {
+		t.Errorf("len(Message) = %d, want at most %d", len(e.Message), maxErrorBodyBytes+64)
+	}
 }
 
 func TestClient_DeleteRaw(t *testing.T) {

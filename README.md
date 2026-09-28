@@ -66,6 +66,20 @@ rl := client.LastRateLimit()
 fmt.Printf("%d/%d remaining, resets at %s\n", rl.Remaining, rl.Limit, rl.Reset)
 ```
 
+## Safety limits
+
+The client assumes the endpoint may misbehave and bounds what it will do on its behalf:
+
+- `Retry-After` sleeps are clamped to `DefaultMaxRetryAfter` (30s); raise with `WithMaxRetryAfter`.
+- Response bodies are read up to `DefaultMaxResponseBytes` (32 MiB) and rejected beyond that; raise with
+  `WithMaxResponseBytes`.
+- `WithBaseURL` accepts only an absolute `http`/`https` URL without embedded credentials, query, or fragment;
+  anything else fails every request with a `Validation` error.
+- `POST` requests are never retried on 5xx or transport errors, since the server may already have acted on them.
+- Every status outside 2xx surfaces as an `*Error`.
+
+See [SECURITY.md](./SECURITY.md) for the disclosure policy.
+
 ## API Coverage
 
 | Service     | Status      | Description                                            |

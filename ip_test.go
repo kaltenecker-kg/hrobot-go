@@ -305,6 +305,24 @@ func TestIPService_NilIPGuard(t *testing.T) {
 	}
 }
 
+// TestIPService_InvalidLengthIPGuard covers a net.IP that is neither 4 nor
+// 16 bytes long: net.IP.String renders it as "?"-prefixed hex, and that "?"
+// would start the query string of the request URL, so it must be rejected
+// before a request is built.
+func TestIPService_InvalidLengthIPGuard(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("no request must be sent for an invalid IP; got %s %s", r.Method, r.URL.String())
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	_, err := client.IP.Get(context.Background(), net.IP{1, 2, 3})
+	var e *Error
+	if !errors.As(err, &e) || e.Kind != ErrKindParse {
+		t.Fatalf("expected parse error, got %T: %v", err, err)
+	}
+}
+
 func TestIPService_CancelIP_DisallowedByPolicy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 		t.Fatalf("CancelIP must not perform an HTTP call; got %s %s", r.Method, r.URL.Path)

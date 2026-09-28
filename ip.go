@@ -20,6 +20,15 @@ func NewIPService(client *Client) *IPService {
 	return &IPService{client: client}
 }
 
+// validIP reports whether ip is a 4- or 16-byte address that can be placed
+// in a request path. net.IP.String renders a nil IP as "<nil>" and an IP of
+// any other length as "?" followed by hex, and that "?" would start the
+// query string of the assembled URL, so both are rejected before a request
+// is built.
+func validIP(ip net.IP) bool {
+	return ip.To16() != nil
+}
+
 // List returns all IP addresses.
 func (i *IPService) List(ctx context.Context) ([]IPAddress, error) {
 	var ips []IPAddress
@@ -32,7 +41,7 @@ func (i *IPService) List(ctx context.Context) ([]IPAddress, error) {
 
 // Get returns details for a specific IP address.
 func (i *IPService) Get(ctx context.Context, ip net.IP) (*IPAddress, error) {
-	if ip == nil {
+	if !validIP(ip) {
 		return nil, NewParseError("invalid ip address", nil)
 	}
 	var ipAddr IPAddress
@@ -49,7 +58,7 @@ func (i *IPService) Get(ctx context.Context, ip net.IP) (*IPAddress, error) {
 // POST /ip/{ip} returns the updated IP address resource (per the doc's
 // Output table), so this returns it rather than discarding the response.
 func (i *IPService) SetTrafficWarnings(ctx context.Context, ip net.IP, enabled bool) (*IPAddress, error) {
-	if ip == nil {
+	if !validIP(ip) {
 		return nil, NewParseError("invalid ip address", nil)
 	}
 	path := fmt.Sprintf("/ip/%s", ip.String())
@@ -78,7 +87,7 @@ func (i *IPService) CancelIP(context.Context, net.IP, string) error {
 
 // WithdrawIPCancellation withdraws an IP cancellation.
 func (i *IPService) WithdrawIPCancellation(ctx context.Context, ip net.IP) error {
-	if ip == nil {
+	if !validIP(ip) {
 		return NewParseError("invalid ip address", nil)
 	}
 	path := fmt.Sprintf("/ip/%s/cancellation", ip.String())
@@ -97,7 +106,7 @@ type IPMAC struct {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#get-ip-ip-mac
 func (i *IPService) GetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
-	if ip == nil {
+	if !validIP(ip) {
 		return nil, NewParseError("invalid ip address", nil)
 	}
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
@@ -114,7 +123,7 @@ func (i *IPService) GetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#put-ip-ip-mac
 func (i *IPService) SetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
-	if ip == nil {
+	if !validIP(ip) {
 		return nil, NewParseError("invalid ip address", nil)
 	}
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
@@ -131,7 +140,7 @@ func (i *IPService) SetMAC(ctx context.Context, ip net.IP) (*IPMAC, error) {
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#delete-ip-ip-mac
 func (i *IPService) DeleteMAC(ctx context.Context, ip net.IP) error {
-	if ip == nil {
+	if !validIP(ip) {
 		return NewParseError("invalid ip address", nil)
 	}
 	path := fmt.Sprintf("/ip/%s/mac", ip.String())
