@@ -38,6 +38,6 @@ verify:
 # Scan for known vulnerabilities in dependencies and reachable code.
 # govulncheck is pinned by commit SHA for reproducibility; Renovate bumps it.
 vulncheck:
-	go run golang.org/x/vuln/cmd/govulncheck@617f44b718537dccdea1915395650e0529e3b72e ./... # v1.7.0
+	go run golang.org/x/vuln/cmd/govulncheck@709015412431dd2b5b28a53c06c70bc02d49074c ./... # v1.8.0
 
 .PHONY: default all fmt lint vet test tidy-check verify vulncheck
