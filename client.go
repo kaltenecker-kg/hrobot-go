@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -127,20 +128,23 @@ func WithBaseURL(url string) ClientOption {
 // Credentials embedded in the URL are refused because the client already
 // sends Basic auth from NewClient's arguments and logs the request URL at
 // DEBUG level; a userinfo component would leak into those logs.
+//
+// The returned error carries status 400, the status the API answers with for
+// INVALID_INPUT, so callers can treat this local rejection like a remote one.
 func validateBaseURL(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
-		return NewValidationError(ErrInvalidInput, "invalid base URL: "+err.Error(), 0)
+		return NewValidationError(ErrInvalidInput, "invalid base URL: "+err.Error(), http.StatusBadRequest)
 	}
 	switch {
 	case u.Scheme != "http" && u.Scheme != "https":
-		return NewValidationError(ErrInvalidInput, "invalid base URL: scheme must be http or https", 0)
+		return NewValidationError(ErrInvalidInput, "invalid base URL: scheme must be http or https", http.StatusBadRequest)
 	case u.Host == "":
-		return NewValidationError(ErrInvalidInput, "invalid base URL: missing host", 0)
+		return NewValidationError(ErrInvalidInput, "invalid base URL: missing host", http.StatusBadRequest)
 	case u.User != nil:
-		return NewValidationError(ErrInvalidInput, "invalid base URL: must not embed credentials; pass them to NewClient", 0)
+		return NewValidationError(ErrInvalidInput, "invalid base URL: must not embed credentials; pass them to NewClient", http.StatusBadRequest)
 	case u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "":
-		return NewValidationError(ErrInvalidInput, "invalid base URL: must not contain a query or fragment", 0)
+		return NewValidationError(ErrInvalidInput, "invalid base URL: must not contain a query or fragment", http.StatusBadRequest)
 	}
 	return nil
 }
@@ -613,7 +617,15 @@ func truncateForMessage(body []byte) string {
 // silently truncated payload that would then fail to decode in a confusing
 // way (or, worse, decode to a partial list).
 func readBodyLimited(r io.Reader, limit int64) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(r, limit+1))
+	// limit+1 would wrap to a negative number for limit == math.MaxInt64,
+	// and a LimitReader with a negative budget reads nothing: the body would
+	// come back empty with no error and pass as a success. A caller who
+	// picks that limit wants no cap at all, so give them exactly that.
+	probe := limit + 1
+	if probe < 0 {
+		probe = math.MaxInt64
+	}
+	data, err := io.ReadAll(io.LimitReader(r, probe))
 	if err != nil {
 		return nil, NewNetworkError("failed to read response body", err)
 	}

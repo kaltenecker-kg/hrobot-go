@@ -10,7 +10,7 @@ IMPROVEMENTS:
   response
 - **client**: `WithBaseURL`/`WithEndpoint` now validate the URL. A base URL whose scheme is not `http`/`https`, that
   has no host, embeds credentials, or carries a query or fragment makes every request fail with a `Validation`
-  error carrying `INVALID_INPUT`, rather than concatenating into a malformed request URL (a query in the base would
+  error carrying `INVALID_INPUT` and status 400, rather than concatenating into a malformed request URL (a query in the base would
   have swallowed the path) or logging embedded credentials at DEBUG level
 - **client**: Any response status outside 2xx is now reported as an `*Error`. Previously a 1xx/3xx response that
   reached `handleResponse` was treated as an empty success

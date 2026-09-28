@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -323,16 +324,21 @@ func TestCredentialValidation(t *testing.T) {
 }
 
 func TestBaseURLValidation(t *testing.T) {
+	// want is the fragment of the rejection message that identifies which
+	// validateBaseURL branch fired, so a case cannot pass by tripping a
+	// different check than the one it is meant to cover.
 	rejected := []struct {
-		name, baseURL string
+		name, baseURL, want string
 	}{
-		{"unsupported scheme", "ftp://robot.example"},
-		{"missing scheme", "robot.example"},
-		{"missing host", "https://"},
-		{"embedded credentials", "https://user:pass@robot.example"},
-		{"query string", "https://robot.example/?x=1"},
-		{"fragment", "https://robot.example/#frag"},
-		{"unparseable", "https://robot.example/%zz"},
+		{"unsupported scheme", "ftp://robot.example", "scheme must be http or https"},
+		{"missing scheme", "robot.example", "scheme must be http or https"},
+		{"missing host", "https://", "missing host"},
+		{"embedded credentials", "https://user:pass@robot.example", "must not embed credentials"},
+		{"embedded username only", "https://user@robot.example", "must not embed credentials"},
+		{"query string", "https://robot.example/?x=1", "query or fragment"},
+		{"empty query", "https://robot.example/?", "query or fragment"},
+		{"fragment", "https://robot.example/#frag", "query or fragment"},
+		{"unparseable", "https://robot.example/%zz", "invalid URL escape"},
 	}
 	for _, tc := range rejected {
 		t.Run("rejects "+tc.name, func(t *testing.T) {
@@ -344,6 +350,12 @@ func TestBaseURLValidation(t *testing.T) {
 			var e *Error
 			if !errors.As(err, &e) || e.Kind != ErrKindValidation || e.Code != ErrInvalidInput {
 				t.Fatalf("err = %v, want Validation[INVALID_INPUT]", err)
+			}
+			if e.Status != http.StatusBadRequest {
+				t.Errorf("Status = %d, want 400 (mirrors the API's INVALID_INPUT status)", e.Status)
+			}
+			if !strings.Contains(e.Message, tc.want) {
+				t.Errorf("Message = %q, want it to contain %q", e.Message, tc.want)
 			}
 		})
 	}
@@ -403,6 +415,26 @@ func TestHandleResponse_BodyAtLimitIsAccepted(t *testing.T) {
 	}
 	if len(out["pad"].(string)) != 100 { //nolint:forcetypeassert // fixture-controlled shape
 		t.Errorf("decoded pad = %v, want the 100-byte fixture", out["pad"])
+	}
+}
+
+func TestHandleResponse_MaxInt64LimitReadsWholeBody(t *testing.T) {
+	// limit+1 overflows for math.MaxInt64; a naive LimitReader would then
+	// have a negative budget and return an empty body without error.
+	body := `{"server":{"pad":"` + strings.Repeat("x", 100) + `"}}`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(body))
+	}))
+	defer server.Close()
+
+	client := NewClient("user", "pass", WithBaseURL(server.URL), WithMaxResponseBytes(math.MaxInt64))
+	var out map[string]any
+	if err := client.Get(context.Background(), "/server", &out); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if pad, _ := out["pad"].(string); len(pad) != 100 {
+		t.Errorf("decoded pad = %v, want the 100-byte fixture (body must not be dropped)", out["pad"])
 	}
 }
 
