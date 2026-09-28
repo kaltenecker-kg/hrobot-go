@@ -55,6 +55,12 @@ tasks:
     cmds:
       - go mod verify
 
+  vulncheck:
+    desc: Scan dependencies and reachable code for known vulnerabilities.
+    cmds:
+      # Mirrors the GNUmakefile target; see the comment there for why @latest.
+      - go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
   version:
     desc: Print the release version derived from client.go.
     silent: true

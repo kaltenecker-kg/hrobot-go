@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -37,6 +38,19 @@ const (
 // when talking to a trusted endpoint whose backoff hints you want to honor.
 const DefaultMaxRetryAfter = 30 * time.Second
 
+// DefaultMaxResponseBytes is the default ceiling on the size of a response
+// body the client reads into memory. The Robot API's largest documented
+// responses (server and IP inventories, per-day traffic breakdowns) are
+// well under a megabyte, so the cap only bites on a misbehaving or hostile
+// endpoint that streams an unbounded body; without it a single response
+// could exhaust the caller's memory. Override it with WithMaxResponseBytes.
+const DefaultMaxResponseBytes int64 = 32 << 20
+
+// maxErrorBodyBytes bounds how much of a non-JSON error body (typically an
+// HTML page from a proxy or load balancer) is copied into an *Error message,
+// so a large upstream error page does not end up verbatim in logs.
+const maxErrorBodyBytes = 1024
+
 // Client is the main API client for Hetzner Robot.
 type Client struct {
 	baseURL    string
@@ -45,6 +59,11 @@ type Client struct {
 	password   string
 	userAgent  string
 	logger     *slog.Logger
+
+	// baseURLErr records why the configured base URL was rejected by
+	// validateBaseURL, if it was. ClientOption cannot return an error, so
+	// the rejection is deferred to the first request instead.
+	baseURLErr error
 
 	rateLimitMu sync.RWMutex
 	rateLimit   RateLimit
@@ -56,6 +75,10 @@ type Client struct {
 	// maxRetryAfter caps how long a server's Retry-After header may delay a
 	// retry; see WithMaxRetryAfter and DefaultMaxRetryAfter.
 	maxRetryAfter time.Duration
+
+	// maxResponseBytes caps how much of a response body is read; see
+	// WithMaxResponseBytes and DefaultMaxResponseBytes.
+	maxResponseBytes int64
 
 	// API Services
 	Server     *ServerService
@@ -87,11 +110,43 @@ type RateLimit struct {
 // ClientOption configures the Client.
 type ClientOption func(*Client)
 
-// WithBaseURL sets a custom base URL.
+// WithBaseURL sets a custom base URL. It must be an absolute http or https
+// URL with a host and without credentials, query, or fragment; anything else
+// makes every request fail with a Validation error instead of sending a
+// request to a URL that was assembled wrongly (see validateBaseURL).
 func WithBaseURL(url string) ClientOption {
 	return func(c *Client) {
 		c.baseURL = strings.TrimSuffix(url, "/")
+		c.baseURLErr = validateBaseURL(c.baseURL)
 	}
+}
+
+// validateBaseURL rejects base URLs that cannot safely be prefixed onto a
+// request path. Requests are built by string concatenation (baseURL + path),
+// so a query or fragment in the base would swallow the path, and a non-HTTP
+// scheme or missing host would only fail once the transport is reached.
+// Credentials embedded in the URL are refused because the client already
+// sends Basic auth from NewClient's arguments and logs the request URL at
+// DEBUG level; a userinfo component would leak into those logs.
+//
+// The returned error carries status 400, the status the API answers with for
+// INVALID_INPUT, so callers can treat this local rejection like a remote one.
+func validateBaseURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return NewValidationError(ErrInvalidInput, "invalid base URL: "+err.Error(), http.StatusBadRequest)
+	}
+	switch {
+	case u.Scheme != "http" && u.Scheme != "https":
+		return NewValidationError(ErrInvalidInput, "invalid base URL: scheme must be http or https", http.StatusBadRequest)
+	case u.Host == "":
+		return NewValidationError(ErrInvalidInput, "invalid base URL: missing host", http.StatusBadRequest)
+	case u.User != nil:
+		return NewValidationError(ErrInvalidInput, "invalid base URL: must not embed credentials; pass them to NewClient", http.StatusBadRequest)
+	case u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.RawFragment != "":
+		return NewValidationError(ErrInvalidInput, "invalid base URL: must not contain a query or fragment", http.StatusBadRequest)
+	}
+	return nil
 }
 
 // WithEndpoint sets a custom API endpoint URL. It is an alias for WithBaseURL,
@@ -177,6 +232,20 @@ func WithMaxRetryAfter(d time.Duration) ClientOption {
 	}
 }
 
+// WithMaxResponseBytes overrides the ceiling on how many bytes of a response
+// body the client reads into memory (default DefaultMaxResponseBytes). A
+// response that exceeds the cap is discarded and reported as a Parse error,
+// so a misbehaving or hostile endpoint cannot exhaust memory with an
+// unbounded body. Raise it only if a documented response genuinely exceeds
+// the default. Values <= 0 are ignored and the default is kept.
+func WithMaxResponseBytes(n int64) ClientOption {
+	return func(c *Client) {
+		if n > 0 {
+			c.maxResponseBytes = n
+		}
+	}
+}
+
 // NewClient creates a new Hetzner Robot API client.
 func NewClient(username, password string, opts ...ClientOption) *Client {
 	c := &Client{
@@ -186,6 +255,7 @@ func NewClient(username, password string, opts ...ClientOption) *Client {
 		userAgent:             UserAgent,
 		maxFirewallInputRules: MaxFirewallInputRules,
 		maxRetryAfter:         DefaultMaxRetryAfter,
+		maxResponseBytes:      DefaultMaxResponseBytes,
 		httpClient: &http.Client{
 			Timeout: DefaultTimeout,
 		},
@@ -414,6 +484,9 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 	if err := validateCredentials(c.username, c.password); err != nil {
 		return nil, err
 	}
+	if c.baseURLErr != nil {
+		return nil, c.baseURLErr
+	}
 
 	reqURL := c.baseURL + path
 
@@ -511,11 +584,14 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 	}
 }
 
-// errorFromResponse builds an *Error from a non-2xx response body.
+// errorFromResponse builds an *Error from a non-2xx response body. A body
+// that is not the documented JSON error envelope (an HTML error page from a
+// proxy, an empty redirect body) is quoted in the message, truncated to
+// maxErrorBodyBytes so it cannot balloon a log line.
 func errorFromResponse(statusCode int, body []byte) error {
 	var apiErr APIErrorResponse
 	if err := json.Unmarshal(body, &apiErr); err != nil {
-		return newAPIErrorWithStatus(ErrUnknown, fmt.Sprintf("HTTP %d: %s", statusCode, body), statusCode)
+		return newAPIErrorWithStatus(ErrUnknown, fmt.Sprintf("HTTP %d: %s", statusCode, truncateForMessage(body)), statusCode)
 	}
 	status := apiErr.Error.Status
 	if status == 0 {
@@ -524,13 +600,55 @@ func errorFromResponse(statusCode int, body []byte) error {
 	return newAPIErrorWithStatus(apiErr.Error.Code, apiErr.Error.Message, status)
 }
 
-// handleResponse processes the HTTP response and handles errors.
+// truncateForMessage returns body as a string, cut to maxErrorBodyBytes with
+// a marker when it was longer. Invalid UTF-8 (including a rune split by the
+// cut) is replaced so the message stays printable.
+func truncateForMessage(body []byte) string {
+	if len(body) <= maxErrorBodyBytes {
+		return strings.ToValidUTF8(string(body), "\uFFFD")
+	}
+	return strings.ToValidUTF8(string(body[:maxErrorBodyBytes]), "\uFFFD") +
+		fmt.Sprintf("... (%d bytes truncated)", len(body)-maxErrorBodyBytes)
+}
+
+// readBodyLimited reads at most limit bytes from r. It reads one byte past
+// the limit to distinguish a body that is exactly limit bytes long from one
+// that is larger, and reports the latter as an error rather than returning a
+// silently truncated payload that would then fail to decode in a confusing
+// way (or, worse, decode to a partial list).
+func readBodyLimited(r io.Reader, limit int64) ([]byte, error) {
+	// limit+1 would wrap to a negative number for limit == math.MaxInt64,
+	// and a LimitReader with a negative budget reads nothing: the body would
+	// come back empty with no error and pass as a success. A caller who
+	// picks that limit wants no cap at all, so give them exactly that.
+	probe := limit + 1
+	if probe < 0 {
+		probe = math.MaxInt64
+	}
+	data, err := io.ReadAll(io.LimitReader(r, probe))
+	if err != nil {
+		return nil, NewNetworkError("failed to read response body", err)
+	}
+	if int64(len(data)) > limit {
+		return nil, NewParseError(
+			fmt.Sprintf("response body exceeds the %d byte limit; raise it with WithMaxResponseBytes if the response is legitimate", limit),
+			nil,
+		)
+	}
+	return data, nil
+}
+
+// handleResponse processes the HTTP response and handles errors. Any status
+// outside 2xx is reported as an error: 4xx/5xx carry the documented JSON
+// error envelope, while 1xx/3xx never occur on a healthy API (the transport
+// follows redirects itself) and would otherwise be mistaken for an empty
+// success.
 func (c *Client) handleResponse(ctx context.Context, resp *http.Response, v any) error {
 	defer func() { _ = resp.Body.Close() }()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readBodyLimited(resp.Body, c.maxResponseBytes)
 	if err != nil {
-		return NewNetworkError("failed to read response body", err)
+		return err
 	}
 
 	c.logger.LogAttrs(ctx, slog.LevelDebug, "hrobot response",
@@ -538,7 +656,7 @@ func (c *Client) handleResponse(ctx context.Context, resp *http.Response, v any)
 		slog.Int("body_bytes", len(body)),
 	)
 
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return errorFromResponse(resp.StatusCode, body)
 	}
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+IMPROVEMENTS:
+
+- **client**: Response bodies are now read with a size cap, `DefaultMaxResponseBytes` (32 MiB), overridable with
+  `WithMaxResponseBytes`. A body over the cap is discarded and reported as a `Parse` error instead of being read
+  into memory in full, so a misbehaving or hostile endpoint cannot exhaust the caller's memory with an unbounded
+  response
+- **client**: `WithBaseURL`/`WithEndpoint` now validate the URL. A base URL whose scheme is not `http`/`https`, that
+  has no host, embeds credentials, or carries a query or fragment makes every request fail with a `Validation`
+  error carrying `INVALID_INPUT` and status 400, rather than concatenating into a malformed request URL (a query in the base would
+  have swallowed the path) or logging embedded credentials at DEBUG level
+- **client**: Any response status outside 2xx is now reported as an `*Error`. Previously a 1xx/3xx response that
+  reached `handleResponse` was treated as an empty success
+- **client**: Non-JSON error bodies quoted in `*Error` messages (proxy HTML pages and the like) are truncated to
+  1 KiB so an upstream error page cannot balloon a log line
+- **ip**: `IPService` methods taking a `net.IP` now reject addresses that are not 4 or 16 bytes long, not only
+  `nil`. `net.IP.String` renders any other length as `?`-prefixed hex, which would have started the query string of
+  the request URL
+- **types**: `TrafficSize` compiles its parsing pattern once at package init instead of on every decode
+
 ## 2.2.1 (2026-08-25)
 
 BUG FIXES:

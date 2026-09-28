@@ -36,8 +36,12 @@ verify:
 	go mod verify
 
 # Scan for known vulnerabilities in dependencies and reachable code.
-# govulncheck is pinned by commit SHA for reproducibility; Renovate bumps it.
+# @latest on purpose: a scanner should be current, Dependabot cannot bump a
+# version literal here, and the module proxy plus sum.golang.org verify
+# whatever version resolves. Not a go.mod `tool` dependency because
+# golang.org/x/vuln would force the go directive to 1.26.0 (see go.mod).
+# CI runs the same command.
 vulncheck:
-	go run golang.org/x/vuln/cmd/govulncheck@617f44b718537dccdea1915395650e0529e3b72e ./... # v1.7.0
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 .PHONY: default all fmt lint vet test tidy-check verify vulncheck

@@ -7,6 +7,7 @@ linters:
     - errcheck
     - forcetypeassert
     - godot
+    - gosec
     - ineffassign
     - makezero
     - misspell
@@ -27,6 +28,13 @@ linters:
     paths:
       - third_party$
       - builtin$
+    rules:
+      # Test fixtures quote example passwords verbatim from the Hetzner doc
+      # (e.g. the rescue-system response); they are not credentials.
+      - path: _test\.go
+        linters:
+          - gosec
+        text: G101
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

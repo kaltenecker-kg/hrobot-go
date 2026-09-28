@@ -1,20 +1,60 @@
-# See GitHub's documentation for more information on this file:
-# https://docs.github.com/en/code-security/supply-chain-security/keeping-your-dependencies-updated-automatically/configuration-options-for-dependency-updates
+# Dependabot is the only dependency-update bot for this repository. Renovate
+# was configured previously but the hosted Mend app never ran for the org
+# (it requires a paid license), so its config was removed.
+#
+# Two things Dependabot cannot manage on purpose:
+#   - govulncheck runs as `go run ...@latest` (GNUmakefile, test.yml), so it
+#     is always current without a version literal to bump.
+#   - golangci-lint-action's `version` input is `latest` for the same reason.
+#
+# See https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
 version: 2
 updates:
-  # Maintain dependencies for Go modules
   - package-ecosystem: "gomod"
     directory: "/"
-    schedule:
-      interval: "daily"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    groups:
-      "github-actions":
-        patterns:
-          - "*"
     schedule:
       interval: "weekly"
       day: "monday"
       time: "09:00"
       timezone: "Etc/UTC"
+    # One PR for all Go module bumps; go.mod is small and they are reviewed
+    # together anyway.
+    groups:
+      go-modules:
+        patterns:
+          - "*"
+    # Cooling-off period before a new release is proposed, so a release that
+    # is yanked or found malicious within days never reaches a PR. Security
+    # updates bypass the cooldown.
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 7
+
+  # husky + markdownlint-cli2 via pnpm (pnpm-lock.yaml). Mirrors the
+  # minimumReleaseAge in pnpm-workspace.yaml that guards local installs.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Etc/UTC"
+    groups:
+      npm-dev-tooling:
+        patterns:
+          - "*"
+    cooldown:
+      default-days: 7
