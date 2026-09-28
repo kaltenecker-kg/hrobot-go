@@ -25,7 +25,7 @@ const (
 	DefaultTimeout = 30 * time.Second
 	// Version is the hrobot-go library version, reported in the default
 	// User-Agent. Bump it in the release commit.
-	Version = "2.2.1"
+	Version = "2.3.0"
 	// UserAgent is the default User-Agent header value.
 	UserAgent = "hrobot-go/" + Version
 )
