@@ -12,10 +12,10 @@ import (
 	"strings"
 )
 
-// EncodeFirewallRules encodes firewall rules into Hetzner's hierarchical format
-// Example: rules[input][0][name]=rule1&rules[input][0][action]=accept.
-// Note: Returns a string instead of url.Values because Hetzner's API expects
-// brackets in keys to NOT be URL-encoded.
+// EncodeFirewallRules encodes firewall rules into Hetzner's hierarchical
+// format, e.g. rules[input][0][name]=rule1&rules[input][0][action]=accept.
+// It returns a string instead of url.Values because the API expects the
+// brackets in those keys to stay literal rather than percent-encoded.
 //
 // Directions and per-rule field keys are emitted in sorted order so the output
 // is deterministic for a given input (Go map iteration order is randomized).

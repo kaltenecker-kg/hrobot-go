@@ -137,11 +137,9 @@ func TestBootService_Get(t *testing.T) {
 	}
 }
 
-// TestBootService_ActivateRescue is now wrapped with spectest.Handler: the
-// spec/robot.yaml RescueSystemActivated.authorized_key/host_key schema
-// previously declared arrays of bare fingerprint strings; it now models the
-// doc's actual {"key": {name, fingerprint, type, size}} object shape (see
-// spec/README.md, "boot tag fixes"), matching this fixture.
+// The fixture carries the doc's {"key": {name, fingerprint, type, size}}
+// shape for RescueSystemActivated.authorized_key/host_key, which is what
+// spec/robot.yaml models (see spec/README.md, "boot tag fixes").
 func TestBootService_ActivateRescue(t *testing.T) {
 	tests := []struct {
 		name         string

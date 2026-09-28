@@ -61,8 +61,8 @@ type TrafficStats struct {
 // a single IP don't need to build a slice.
 type TrafficGetParams struct {
 	Type         TrafficType // Type of data (day, month, year)
-	From         string      // Start date (format depends on Type; see comments)
-	To           string      // End date (format depends on Type; see comments)
+	From         string      // Start date (format depends on Type; see above)
+	To           string      // End date (format depends on Type; see above)
 	IP           string      // Single server IP address (optional; shorthand for IPs)
 	IPs          []string    // One or more server IP addresses (optional)
 	Subnets      []string    // One or more subnet addresses (optional)
