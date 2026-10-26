@@ -11,7 +11,7 @@ module github.com/kaltenecker-kg/hrobot-go/v2
 // dependency: golang.org/x/vuln declares 1.26.0 too.
 go 1.26
 
-require github.com/getkin/kin-openapi v0.149.0
+require github.com/getkin/kin-openapi v0.151.0
 
 require (
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
