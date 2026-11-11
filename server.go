@@ -3,6 +3,7 @@ package hrobot
 import (
 	"context"
 	"fmt"
+	"net/url"
 )
 
 // ServerService handles server-related API operations.
@@ -41,10 +42,10 @@ func (s *ServerService) SetName(ctx context.Context, serverID ServerID, name str
 	var server Server
 	path := fmt.Sprintf("/server/%s", serverID.String())
 
-	data := make(map[string]string)
-	data["server_name"] = name
+	data := url.Values{}
+	data.Set("server_name", name)
 
-	err := s.client.Post(ctx, path, encodeForm(data), &server)
+	err := s.client.Post(ctx, path, data, &server)
 	if err != nil {
 		return nil, err
 	}

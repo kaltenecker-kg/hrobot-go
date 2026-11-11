@@ -3,6 +3,7 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -579,4 +580,24 @@ func contains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// An empty servers slice would post an empty body; it is rejected locally.
+func TestVSwitchService_ServersRequired(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("no request must be sent; got %s %s", r.Method, r.URL.String())
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+	for name, err := range map[string]error{
+		"AddServers":    client.VSwitch.AddServers(ctx, 4321, nil),
+		"RemoveServers": client.VSwitch.RemoveServers(ctx, 4321, []string{}),
+	} {
+		var e *Error
+		if !errors.As(err, &e) || e.Kind != ErrKindValidation {
+			t.Errorf("%s: expected Validation error, got %T: %v", name, err, err)
+		}
+	}
 }

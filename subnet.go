@@ -19,17 +19,25 @@ func NewSubnetService(client *Client) *SubnetService {
 
 // SubnetResource represents a subnet resource from the Subnet API.
 type SubnetResource struct {
-	IP              string `json:"ip"`
-	Mask            int    `json:"mask"`
-	Gateway         string `json:"gateway"`
-	ServerIP        string `json:"server_ip"`
-	ServerNumber    int    `json:"server_number"`
-	Failover        bool   `json:"failover"`
-	Locked          bool   `json:"locked"`
-	TrafficWarnings bool   `json:"traffic_warnings"`
-	TrafficHourly   int    `json:"traffic_hourly"`
-	TrafficDaily    int    `json:"traffic_daily"`
-	TrafficMonthly  int    `json:"traffic_monthly"`
+	IP           string `json:"ip"`
+	Mask         int    `json:"mask"`
+	Gateway      string `json:"gateway"`
+	ServerIP     string `json:"server_ip"`
+	ServerNumber int    `json:"server_number"`
+	Failover     bool   `json:"failover"`
+	Locked       bool   `json:"locked"`
+	// Deprecated: Hetzner removes the traffic warning fields from the API
+	// on 12 January 2027; after that this is always false.
+	TrafficWarnings bool `json:"traffic_warnings"`
+	// Deprecated: removed from the API on 12 January 2027; see
+	// TrafficWarnings.
+	TrafficHourly int `json:"traffic_hourly"`
+	// Deprecated: removed from the API on 12 January 2027; see
+	// TrafficWarnings.
+	TrafficDaily int `json:"traffic_daily"`
+	// Deprecated: removed from the API on 12 January 2027; see
+	// TrafficWarnings.
+	TrafficMonthly int `json:"traffic_monthly"`
 }
 
 // SubnetMAC represents the MAC address configuration for a subnet.
@@ -82,6 +90,9 @@ func (s *SubnetService) Get(ctx context.Context, netIP string) (*SubnetResource,
 
 // Update updates traffic warning options for a subnet. All four fields are
 // always sent; pass current values for the ones you want to leave alone.
+//
+// Deprecated: Hetzner removes POST /subnet/{net-ip} together with the
+// traffic warning fields on 12 January 2027; the call will fail after that.
 //
 // POST /subnet/{net-ip}
 //

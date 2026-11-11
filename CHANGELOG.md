@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased
+
+BUG FIXES:
+
+- **client**: A 4xx/5xx response whose body is valid JSON but not the documented `{"error": {...}}` envelope (`{}`,
+  `null`, a proxy's `{"message": "Bad Gateway"}`) now yields an `*Error` with code `UNKNOWN` and the (truncated) body
+  in its message, like a non-JSON body already did. Previously it produced an error with an empty code and an empty
+  message
+- **types**: A zero `BerlinTime` now marshals to `null`, matching what `UnmarshalJSON` accepts. It used to encode as
+  `"0001-01-01 00:53:28"`
+- **types**: `BerlinTime` no longer depends on the host's time zone database. `time/tzdata` is embedded, so
+  Europe/Berlin resolves in scratch containers too; the previous fixed UTC+1 fallback was an hour off during summer
+  time. This adds roughly 450 KiB to binaries that did not already embed it
+- **boot**: `ActivateRescue` and `ActivateLinux` send `authorized_key[]` with literal brackets, as the doc's examples
+  show and as every other bracket key in the client is sent, instead of percent-encoding them
+- **storagebox**: `UpdateSubAccount` no longer sends `Password`; `PUT .../subaccount/{username}` documents no such
+  field. Use `ResetSubAccountPassword`
+
+IMPROVEMENTS:
+
+- **errors**: `IsNotFoundError` now matches any API error with HTTP status 404, plus the generic `NOT_FOUND` (new
+  `ErrNotFound` constant), `RDNS_NOT_FOUND`, and `BOOT_CONFIG_NOT_FOUND` codes. It previously matched only
+  `SERVER_NOT_FOUND` and `IP_NOT_FOUND`
+- **boot**, **ip**: Arguments rejected locally (a missing `os`/`dist`/`lang`, an invalid `net.IP`) are now reported
+  as `Validation` errors carrying `INVALID_INPUT` and status 400 instead of `Parse` errors. Callers that matched
+  these on `Kind == ErrKindParse` need to match `ErrKindValidation`
+- **vswitch**: `AddServers` and `RemoveServers` reject an empty server list with a `Validation` error instead of
+  sending a request with an empty body
+- **client**: `WithHTTPClient(nil)` is ignored and the default client kept, rather than panicking on the first
+  request
+- **firewall**: The `UpdateConfig` and `Update` documentation now states that `POST /firewall/{server-id}` replaces
+  the whole configuration: a zero `Rules` wipes the ruleset, and a nil pointer does not mean "unchanged". No
+  behavior change
+- **storagebox**: Documented that the Robot webservice stopped managing stand-alone Storage Boxes on 29 July 2025;
+  only free BX10 boxes attached to a dedicated server remain reachable through `StorageBoxService`
+- **ip**, **subnet**: Following the upstream doc, `IPService.SetTrafficWarnings`, `SubnetService.Update`, and the
+  `TrafficWarnings`/`TrafficHourly`/`TrafficDaily`/`TrafficMonthly` fields of `IPAddress` and `SubnetResource` are
+  marked deprecated. Hetzner removes the fields and both `POST /ip/{ip}` and `POST /subnet/{net-ip}` on
+  12 January 2027
+- **spec**: Re-compared `spec/robot.yaml` with the upstream doc (2026-11-11) and marked the same fields and
+  operations `deprecated: true`
+- **deps**: Update `kin-openapi` to v0.152.0 (test-only), `markdownlint-cli2` to 0.24.0, `actions/setup-node` to
+  v7.1.0, and `pnpm/action-setup` to v6.1.1
+
 ## 2.3.0 (2026-09-28)
 
 IMPROVEMENTS:

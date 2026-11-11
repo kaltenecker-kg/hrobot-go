@@ -2,6 +2,8 @@ package hrobot
 
 import (
 	"errors"
+	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -367,4 +369,27 @@ func TestErrorFromResponse(t *testing.T) {
 			t.Errorf("Message = %q, want it to include the raw body and status", e.Message)
 		}
 	})
+}
+
+func TestIsNotFoundError_StatusAndCodes(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"generic NOT_FOUND", NewAPIError(ErrNotFound, "not found"), true},
+		{"RDNS_NOT_FOUND", NewAPIError(ErrReverseDNSNotFound, "not found"), true},
+		{"BOOT_CONFIG_NOT_FOUND", NewAPIError(ErrBootConfigNotFound, "not found"), true},
+		{"unlisted code with status 404", newAPIErrorWithStatus("STORAGEBOX_NOT_FOUND", "not found", http.StatusNotFound), true},
+		{"wrapped", fmt.Errorf("lookup: %w", newAPIErrorWithStatus(ErrNotFound, "not found", http.StatusNotFound)), true},
+		{"status 409", newAPIErrorWithStatus(ErrFirewallInProcess, "busy", http.StatusConflict), false},
+		{"non-API error with status 404", NewValidationError(ErrNotFound, "local", http.StatusNotFound), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsNotFoundError(tt.err); got != tt.want {
+				t.Errorf("IsNotFoundError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }

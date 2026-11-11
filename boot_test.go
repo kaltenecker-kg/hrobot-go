@@ -3,8 +3,11 @@ package hrobot
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -1242,4 +1245,116 @@ func TestBootConfig_Accessors(t *testing.T) {
 			t.Errorf("AvailableLangs = %v", got)
 		}
 	})
+}
+
+// authorized_key[] must reach the API with literal brackets, like the other
+// bracket keys this client sends; r.Form cannot tell the difference, so this
+// inspects the raw body.
+func TestBootService_AuthorizedKeyLiteralBrackets(t *testing.T) {
+	const fingerprint = "15:28:b0:03:95:f0:77:b3:10:56:15:6b:77:22:a5:bb"
+	wantPair := "authorized_key[]=" + url.QueryEscape(fingerprint)
+
+	spec := loadSpec(t)
+	var bodies []string
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		bodies = append(bodies, string(raw))
+
+		key := []map[string]any{{"key": map[string]any{
+			"name": "key1", "fingerprint": fingerprint, "type": "ED25519", "size": 256,
+		}}}
+		var response map[string]any
+		if strings.HasSuffix(r.URL.Path, "/rescue") {
+			response = map[string]any{"rescue": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"active":          true,
+				"os":              "linux",
+				"arch":            64,
+				"authorized_key":  key,
+				"host_key":        []map[string]any{},
+				"password":        "jEt0dvnIO",
+			}}
+		} else {
+			response = map[string]any{"linux": map[string]any{
+				"server_ip":       "123.123.123.123",
+				"server_ipv6_net": "2a01:4f8:111:4221::",
+				"server_number":   321,
+				"dist":            "CentOS 5.5 minimal",
+				"arch":            64,
+				"lang":            "en",
+				"active":          true,
+				"password":        "jEt0dvnIO",
+				"authorized_key":  key,
+				"host_key":        []map[string]any{},
+			}}
+		}
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
+	})))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+	if _, err := client.Boot.ActivateRescue(ctx, ServerID(321), RescueActivateOpts{
+		OS: "linux", AuthorizedKeys: []string{fingerprint},
+	}); err != nil {
+		t.Fatalf("ActivateRescue: %v", err)
+	}
+	if _, err := client.Boot.ActivateLinux(ctx, ServerID(321), LinuxActivateOpts{
+		Dist: "CentOS 5.5 minimal", Lang: "en", AuthorizedKeys: []string{fingerprint},
+	}); err != nil {
+		t.Fatalf("ActivateLinux: %v", err)
+	}
+
+	if len(bodies) != 2 {
+		t.Fatalf("got %d requests, want 2", len(bodies))
+	}
+	for _, body := range bodies {
+		if !strings.Contains(body, wantPair) {
+			t.Errorf("body %q does not contain %q", body, wantPair)
+		}
+	}
+}
+
+// Missing required options are rejected locally as Validation errors.
+func TestBootService_RequiredOptionsAreValidationErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		t.Errorf("no request must be sent; got %s %s", r.Method, r.URL.String())
+	}))
+	defer server.Close()
+
+	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
+	ctx := context.Background()
+	calls := map[string]func() error{
+		"rescue without os": func() error {
+			_, err := client.Boot.ActivateRescue(ctx, ServerID(321), RescueActivateOpts{})
+			return err
+		},
+		"linux without dist": func() error {
+			_, err := client.Boot.ActivateLinux(ctx, ServerID(321), LinuxActivateOpts{Lang: "en"})
+			return err
+		},
+		"vnc without lang": func() error {
+			_, err := client.Boot.ActivateVNC(ctx, ServerID(321), VNCActivateOpts{Dist: "Debian 12"})
+			return err
+		},
+		"windows without os": func() error {
+			_, err := client.Boot.ActivateWindows(ctx, ServerID(321), "en", "")
+			return err
+		},
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			var e *Error
+			if err := call(); !errors.As(err, &e) || e.Kind != ErrKindValidation || e.Code != ErrInvalidInput {
+				t.Errorf("expected Validation error with INVALID_INPUT, got %T: %v", err, err)
+			}
+		})
+	}
 }

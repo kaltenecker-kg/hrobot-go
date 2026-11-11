@@ -98,6 +98,10 @@ See [SECURITY.md](./SECURITY.md) for the disclosure policy.
 | Subnet      | Implemented | Subnet list/get/update, MAC, cancellation status       |
 | Storage Box | Implemented | Box, snapshots, snapshot plan, sub-accounts            |
 
+Hetzner moved stand-alone Storage Boxes to the Hetzner Console on 29 July 2025; the Robot webservice, and so the
+Storage Box service here, only still manages free BX10 boxes attached to a dedicated server. Everything else is
+served by the [Hetzner API](https://docs.hetzner.cloud/reference/hetzner).
+
 ### Disallowed-by-policy operations
 
 To prevent accidents, this client refuses to invoke endpoints that

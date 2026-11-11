@@ -9,6 +9,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	// Embed the IANA time zone database so Europe/Berlin resolves on hosts
+	// without one (scratch containers, Windows without a Go installation).
+	// The system database, when present, still takes precedence.
+	_ "time/tzdata"
 )
 
 // IPVersion represents the IP protocol version.
@@ -56,18 +61,26 @@ func (s ServerID) String() string {
 // POST /ip/{ip} (single-address responses) include them. All three are
 // therefore optional here so the same type can decode either shape.
 type IPAddress struct {
-	IP              net.IP `json:"ip"`
-	Gateway         net.IP `json:"gateway,omitempty"`
-	Mask            int    `json:"mask,omitempty"`
-	Broadcast       net.IP `json:"broadcast,omitempty"`
-	ServerIP        net.IP `json:"server_ip"`
-	ServerNumber    int    `json:"server_number"`
-	Locked          bool   `json:"locked"`
-	SeparateMac     string `json:"separate_mac,omitempty"`
-	TrafficWarnings bool   `json:"traffic_warnings"`
-	TrafficHourly   int    `json:"traffic_hourly"`
-	TrafficDaily    int    `json:"traffic_daily"`
-	TrafficMonthly  int    `json:"traffic_monthly"`
+	IP           net.IP `json:"ip"`
+	Gateway      net.IP `json:"gateway,omitempty"`
+	Mask         int    `json:"mask,omitempty"`
+	Broadcast    net.IP `json:"broadcast,omitempty"`
+	ServerIP     net.IP `json:"server_ip"`
+	ServerNumber int    `json:"server_number"`
+	Locked       bool   `json:"locked"`
+	SeparateMac  string `json:"separate_mac,omitempty"`
+	// Deprecated: Hetzner removes the traffic warning fields from the API
+	// on 12 January 2027; after that this is always false.
+	TrafficWarnings bool `json:"traffic_warnings"`
+	// Deprecated: removed from the API on 12 January 2027; see
+	// TrafficWarnings.
+	TrafficHourly int `json:"traffic_hourly"`
+	// Deprecated: removed from the API on 12 January 2027; see
+	// TrafficWarnings.
+	TrafficDaily int `json:"traffic_daily"`
+	// Deprecated: removed from the API on 12 January 2027; see
+	// TrafficWarnings.
+	TrafficMonthly int `json:"traffic_monthly"`
 }
 
 // ServerStatus represents the status of a server.
@@ -226,7 +239,9 @@ func init() {
 	var err error
 	berlinLocation, err = time.LoadLocation("Europe/Berlin")
 	if err != nil {
-		// Fallback to UTC+1
+		// Unreachable in practice now that time/tzdata is embedded; kept so a
+		// failure degrades to a fixed offset (wrong by an hour during summer
+		// time) rather than a nil location.
 		berlinLocation = time.FixedZone("CET", 3600)
 	}
 }
@@ -268,8 +283,13 @@ func (bt *BerlinTime) UnmarshalJSON(data []byte) error {
 }
 
 // MarshalJSON formats the timestamp in Europe/Berlin local time using
-// the wire format expected by the Hetzner Robot API.
+// the wire format expected by the Hetzner Robot API. The zero value encodes
+// as null, mirroring UnmarshalJSON, so an absent timestamp round-trips
+// instead of becoming year 1 shifted by Berlin's pre-1893 local mean time.
 func (bt BerlinTime) MarshalJSON() ([]byte, error) {
+	if bt.IsZero() {
+		return []byte("null"), nil
+	}
 	return json.Marshal(bt.In(berlinLocation).Format("2006-01-02 15:04:05"))
 }
 

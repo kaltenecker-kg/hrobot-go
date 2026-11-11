@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 )
 
 // Error represents all possible errors from the hrobot library.
@@ -120,6 +121,13 @@ func NewValidationError(code ErrorCode, message string, status int) *Error {
 	}
 }
 
+// newInvalidInputError returns the Validation error used when an argument is
+// rejected locally before any request is built. It carries INVALID_INPUT and
+// status 400, the pair the API answers with for the same mistake.
+func newInvalidInputError(message string) *Error {
+	return NewValidationError(ErrInvalidInput, message, http.StatusBadRequest)
+}
+
 // ErrorCode represents specific API error codes from Hetzner.
 type ErrorCode string
 
@@ -130,6 +138,7 @@ const (
 	ErrInvalidInput            ErrorCode = "INVALID_INPUT"
 	ErrInvalidInputServerIP    ErrorCode = "INVALID_INPUT_SERVER_IP"
 	ErrInvalidInputIPAddress   ErrorCode = "INVALID_INPUT_IP_ADDRESS"
+	ErrNotFound                ErrorCode = "NOT_FOUND"
 	ErrServerNotFound          ErrorCode = "SERVER_NOT_FOUND"
 	ErrIPNotFound              ErrorCode = "IP_NOT_FOUND"
 	ErrIPLocked                ErrorCode = "IP_LOCKED"
@@ -216,9 +225,25 @@ func IsRateLimitError(err error) bool {
 	return IsAPIError(err, ErrRateLimitExceeded)
 }
 
-// IsNotFoundError checks if the error is a not found error.
+// IsNotFoundError reports whether err is an API error for a resource that
+// does not exist. The API has no single code for this: besides the generic
+// NOT_FOUND it uses per-resource codes (SERVER_NOT_FOUND, IP_NOT_FOUND,
+// RDNS_NOT_FOUND, ...), all answered with HTTP 404. Any API error with status
+// 404 therefore matches, as do the known codes on an error that carries no
+// status (one built with NewAPIError).
 func IsNotFoundError(err error) bool {
-	return IsAPIError(err, ErrServerNotFound) || IsAPIError(err, ErrIPNotFound)
+	var e *Error
+	if !errors.As(err, &e) || e.Kind != ErrKindAPI {
+		return false
+	}
+	if e.Status == http.StatusNotFound {
+		return true
+	}
+	switch e.Code {
+	case ErrNotFound, ErrServerNotFound, ErrIPNotFound, ErrReverseDNSNotFound, ErrBootConfigNotFound:
+		return true
+	}
+	return false
 }
 
 // IsFirewallInProcessError checks if the error is a firewall in process error.

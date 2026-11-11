@@ -275,8 +275,15 @@ func (f *FirewallService) Get(ctx context.Context, serverID ServerID) (*Firewall
 	return &config, nil
 }
 
-// UpdateConfig updates the firewall configuration.
-// Nil pointers indicate unchanged fields (omitted from the request).
+// UpdateConfig is the complete firewall configuration posted by Update.
+//
+// POST /firewall/{server-id} replaces the whole configuration, so nothing in
+// here means "leave unchanged". Rules is always the full ruleset: a zero
+// Rules posts no rules at all and wipes the server's ruleset. A nil pointer
+// only omits that field from the request, which leaves it to the API's
+// default rather than to its current value. To change a single setting, read
+// the configuration with Get and post it back with that setting altered (and
+// see ActivateWithRules for why re-posting rules read from Get needs care).
 type UpdateConfig struct {
 	Status       *FirewallStatus `json:"status,omitempty"`
 	WhitelistHOS *bool           `json:"whitelist_hos,omitempty"`
@@ -284,8 +291,9 @@ type UpdateConfig struct {
 	Rules        FirewallRules   `json:"rules,omitempty"`
 }
 
-// Update updates the firewall configuration for a server.
-// Only non-nil fields in config are sent to the API.
+// Update replaces the firewall configuration for a server with config. See
+// UpdateConfig: this is not a partial update, and an empty config.Rules
+// removes every rule.
 //
 // The rules echoed in the response (and by later Get calls) may be a
 // normalized form of the posted rules; see FirewallRules.Equivalent for

@@ -276,8 +276,13 @@ paths:
 
     post:
       summary: Update IP traffic warnings
-      description: Update traffic warning options for an IP address
+      description: |
+        Update traffic warning options for an IP address.
+
+        Deprecated upstream: the doc announces removal of this endpoint on
+        12 January 2027.
       operationId: updateIPTrafficWarnings
+      deprecated: true
       tags:
         - IP
       parameters:
@@ -292,15 +297,19 @@ paths:
                 traffic_warnings:
                   type: boolean
                   description: Enable/disable traffic warnings
+                  deprecated: true
                 traffic_hourly:
                   type: integer
                   description: Hourly traffic limit in MB
+                  deprecated: true
                 traffic_daily:
                   type: integer
                   description: Daily traffic limit in MB
+                  deprecated: true
                 traffic_monthly:
                   type: integer
                   description: Monthly traffic limit in GB
+                  deprecated: true
       responses:
         '200':
           description: Traffic warnings updated successfully
@@ -557,8 +566,13 @@ paths:
 
     post:
       summary: Update subnet traffic warnings
-      description: Update traffic warning options for a subnet
+      description: |
+        Update traffic warning options for a subnet.
+
+        Deprecated upstream: the doc announces removal of this endpoint on
+        12 January 2027.
       operationId: updateSubnetTrafficWarnings
+      deprecated: true
       tags:
         - Subnet
       parameters:
@@ -573,15 +587,19 @@ paths:
                 traffic_warnings:
                   type: boolean
                   description: Enable/disable traffic warnings
+                  deprecated: true
                 traffic_hourly:
                   type: integer
                   description: Hourly traffic limit in MB
+                  deprecated: true
                 traffic_daily:
                   type: integer
                   description: Daily traffic limit in MB
+                  deprecated: true
                 traffic_monthly:
                   type: integer
                   description: Monthly traffic limit in GB
+                  deprecated: true
       responses:
         '200':
           description: Traffic warnings updated successfully
@@ -3462,15 +3480,19 @@ components:
             traffic_warnings:
               type: boolean
               description: True if traffic warnings are enabled
+              deprecated: true
             traffic_hourly:
               type: integer
               description: Hourly traffic limit in MB
+              deprecated: true
             traffic_daily:
               type: integer
               description: Daily traffic limit in MB
+              deprecated: true
             traffic_monthly:
               type: integer
               description: Monthly traffic limit in GB
+              deprecated: true
 
     IPAddressDetailed:
       type: object
@@ -3598,15 +3620,19 @@ components:
             traffic_warnings:
               type: boolean
               description: True if traffic warnings are enabled
+              deprecated: true
             traffic_hourly:
               type: integer
               description: Hourly traffic limit in MB
+              deprecated: true
             traffic_daily:
               type: integer
               description: Daily traffic limit in MB
+              deprecated: true
             traffic_monthly:
               type: integer
               description: Monthly traffic limit in GB
+              deprecated: true
 
     ResetOptions:
       type: object
