@@ -737,3 +737,31 @@ func TestStringFloatUnmarshalJSON(t *testing.T) {
 		})
 	}
 }
+
+// A zero BerlinTime is what JSON null decodes to, so it must encode back to
+// null rather than to a year-1 timestamp.
+func TestBerlinTime_ZeroRoundTripsAsNull(t *testing.T) {
+	out, err := json.Marshal(BerlinTime{})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if string(out) != "null" {
+		t.Errorf("Marshal(zero) = %s, want null", out)
+	}
+	bt := BerlinTime{Time: time.Now()}
+	if err := json.Unmarshal(out, &bt); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !bt.IsZero() {
+		t.Errorf("round trip = %v, want zero", bt.Time)
+	}
+}
+
+// Europe/Berlin must resolve to the real zone (summer time included), not
+// the fixed-offset fallback.
+func TestBerlinLocation_ObservesSummerTime(t *testing.T) {
+	_, offset := time.Date(2026, 7, 1, 12, 0, 0, 0, berlinLocation).Zone()
+	if offset != 2*60*60 {
+		t.Errorf("July offset = %ds, want 7200", offset)
+	}
+}

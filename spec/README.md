@@ -5,6 +5,7 @@ description of the Hetzner Robot API.
 
 - **Source:** [gist by xavierleune](https://gist.github.com/xavierleune/660084e31f291eef2442c39f4c7f97e8)
 - **Vendored:** 2026-07-11
+- **Last compared with the upstream doc:** 2026-11-11 (see "Upstream doc changes" below)
 
 Hetzner ships no official machine-readable spec for the Robot API — only the
 HTML doc at <https://robot.hetzner.com/doc/webservice/en.html> and a PHP
@@ -21,6 +22,38 @@ hand-written surface regardless (same precedent as hcloud-go). Instead, the
 spec is enforced as a **test contract**: `internal/spectest` validates every
 mocked request and response in the test suite against it, so a fixture that
 drifts from the documented shape fails the test that uses it.
+
+## Upstream doc changes
+
+The gist is a one-off import; what keeps `robot.yaml` current is re-reading
+the HTML doc. To do that, save the doc as
+`spec/upstream/robot-webservice-en.html` (git-ignored), diff its text against
+the previous snapshot, and carry every difference into the spec, the client,
+and this log.
+
+### 2026-11-11 (previous snapshot: 2026-09-02)
+
+The only differences are deprecation notices in the `IP` and `Subnet`
+sections, all with a removal date of 12 January 2027:
+
+- `traffic_warnings`, `traffic_hourly`, `traffic_daily`, and
+  `traffic_monthly` are marked `@deprecated` in the output of `GET /ip`,
+  `GET /ip/{ip}`, `GET /subnet`, and `GET /subnet/{net-ip}`.
+- `POST /ip/{ip}` and `POST /subnet/{net-ip}`, which exist only to set those
+  four fields, are deprecated as whole endpoints.
+
+Spec: the four properties carry `deprecated: true` in the `IP` and `Subnet`
+schemas and in both POST request bodies, and both POST operations are
+`deprecated: true`. They stay in the spec, and the fixtures keep the fields,
+because the doc's examples still show them until the removal date.
+
+Client: `IPService.SetTrafficWarnings`, `SubnetService.Update`, and the four
+fields on `IPAddress` and `SubnetResource` are marked `Deprecated:`. After
+12 January 2027 the fields will decode to their zero values and the two
+methods should be removed together with these spec entries.
+
+No other section changed: every other request, response, and error table is
+identical between the two snapshots.
 
 ## Verification status
 

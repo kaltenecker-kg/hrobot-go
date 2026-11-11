@@ -46,6 +46,11 @@ const DefaultMaxRetryAfter = 30 * time.Second
 // could exhaust the caller's memory. Override it with WithMaxResponseBytes.
 const DefaultMaxResponseBytes int64 = 32 << 20
 
+// retryBackoff is the base delay between automatic retries; attempt n waits
+// n times this long (linear backoff) unless the server sent a Retry-After. It
+// is a variable only so the test binary can shorten it (see TestMain).
+var retryBackoff = 500 * time.Millisecond
+
 // maxErrorBodyBytes bounds how much of a non-JSON error body (typically an
 // HTML page from a proxy or load balancer) is copied into an *Error message,
 // so a large upstream error page does not end up verbatim in logs.
@@ -155,10 +160,15 @@ func WithEndpoint(endpoint string) ClientOption {
 	return WithBaseURL(endpoint)
 }
 
-// WithHTTPClient sets a custom HTTP client.
+// WithHTTPClient sets a custom HTTP client. A nil client is ignored and the
+// default is kept, like the other options do for values they cannot use;
+// storing it would only defer the failure to a nil dereference on the first
+// request.
 func WithHTTPClient(httpClient *http.Client) ClientOption {
 	return func(c *Client) {
-		c.httpClient = httpClient
+		if httpClient != nil {
+			c.httpClient = httpClient
+		}
 	}
 }
 
@@ -538,7 +548,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 		if err != nil {
 			lastErr = NewNetworkError("request failed", err)
 			if method != http.MethodPost && attempt < maxRetries-1 {
-				if err := sleepCtx(ctx, time.Duration(attempt+1)*500*time.Millisecond); err != nil {
+				if err := sleepCtx(ctx, time.Duration(attempt+1)*retryBackoff); err != nil {
 					return nil, err
 				}
 				continue
@@ -551,7 +561,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body io.Rea
 		if shouldRetry(method, resp.StatusCode, attempt) && attempt < maxRetries-1 {
 			delay := retryAfter(resp.Header, c.maxRetryAfter)
 			if delay == 0 {
-				delay = time.Duration(attempt+1) * 500 * time.Millisecond
+				delay = time.Duration(attempt+1) * retryBackoff
 			}
 			_ = resp.Body.Close()
 			c.logger.LogAttrs(ctx, slog.LevelDebug, "hrobot retry",
@@ -588,9 +598,16 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 // that is not the documented JSON error envelope (an HTML error page from a
 // proxy, an empty redirect body) is quoted in the message, truncated to
 // maxErrorBodyBytes so it cannot balloon a log line.
+//
+// Valid JSON is not enough to count as the envelope: `{}`, `null`, or a
+// proxy's `{"message": "Bad Gateway"}` all decode without error but leave the
+// "error" object empty, which would otherwise surface as an *Error with no
+// code and no message. Those take the same fallback as a non-JSON body.
 func errorFromResponse(statusCode int, body []byte) error {
 	var apiErr APIErrorResponse
-	if err := json.Unmarshal(body, &apiErr); err != nil {
+	err := json.Unmarshal(body, &apiErr)
+	noEnvelope := apiErr.Error.Message == "" && (apiErr.Error.Code == "" || apiErr.Error.Code == ErrUnknown)
+	if err != nil || noEnvelope {
 		return newAPIErrorWithStatus(ErrUnknown, fmt.Sprintf("HTTP %d: %s", statusCode, truncateForMessage(body)), statusCode)
 	}
 	status := apiErr.Error.Status

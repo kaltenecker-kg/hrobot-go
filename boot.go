@@ -272,7 +272,7 @@ type RescueActivateOpts struct {
 // ActivateRescue activates the rescue system.
 func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, opts RescueActivateOpts) (*RescueConfig, error) {
 	if opts.OS == "" {
-		return nil, NewParseError("os is required", nil)
+		return nil, newInvalidInputError("os is required")
 	}
 
 	path := fmt.Sprintf("/boot/%s/rescue", serverID.String())
@@ -286,12 +286,12 @@ func (b *BootService) ActivateRescue(ctx context.Context, serverID ServerID, opt
 		data.Set("keyboard", opts.Keyboard)
 	}
 
-	for _, fingerprint := range opts.AuthorizedKeys {
-		data.Add("authorized_key[]", fingerprint)
-	}
+	// authorized_key[] is a bracket key: sent with literal brackets, as the
+	// doc's examples show, like every other array parameter in this client.
+	body := appendBracketArray(data.Encode(), "authorized_key", opts.AuthorizedKeys)
 
 	var rescue RescueConfig
-	err := b.client.Post(ctx, path, data, &rescue)
+	err := b.client.PostRaw(ctx, path, body, &rescue)
 	if err != nil {
 		return nil, err
 	}
@@ -338,10 +338,10 @@ type LinuxActivateOpts struct {
 // ActivateLinux activates Linux installation.
 func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, opts LinuxActivateOpts) (*LinuxConfig, error) {
 	if opts.Dist == "" {
-		return nil, NewParseError("dist is required", nil)
+		return nil, newInvalidInputError("dist is required")
 	}
 	if opts.Lang == "" {
-		return nil, NewParseError("lang is required", nil)
+		return nil, newInvalidInputError("lang is required")
 	}
 
 	path := fmt.Sprintf("/boot/%s/linux", serverID.String())
@@ -353,12 +353,11 @@ func (b *BootService) ActivateLinux(ctx context.Context, serverID ServerID, opts
 		data.Set("arch", fmt.Sprintf("%d", opts.Arch))
 	}
 
-	for _, key := range opts.AuthorizedKeys {
-		data.Add("authorized_key[]", key)
-	}
+	// See ActivateRescue for why authorized_key[] bypasses url.Values.
+	body := appendBracketArray(data.Encode(), "authorized_key", opts.AuthorizedKeys)
 
 	var linux LinuxConfig
-	err := b.client.Post(ctx, path, data, &linux)
+	err := b.client.PostRaw(ctx, path, body, &linux)
 	if err != nil {
 		return nil, err
 	}
@@ -390,10 +389,10 @@ type VNCActivateOpts struct {
 // ActivateVNC activates VNC installation.
 func (b *BootService) ActivateVNC(ctx context.Context, serverID ServerID, opts VNCActivateOpts) (*VNCConfig, error) {
 	if opts.Dist == "" {
-		return nil, NewParseError("dist is required", nil)
+		return nil, newInvalidInputError("dist is required")
 	}
 	if opts.Lang == "" {
-		return nil, NewParseError("lang is required", nil)
+		return nil, newInvalidInputError("lang is required")
 	}
 
 	path := fmt.Sprintf("/boot/%s/vnc", serverID.String())
@@ -447,10 +446,10 @@ func (b *BootService) GetWindows(ctx context.Context, serverID ServerID) (*Windo
 // Input table for this endpoint lists both lang and os as required.
 func (b *BootService) ActivateWindows(ctx context.Context, serverID ServerID, lang string, os string) (*WindowsConfig, error) {
 	if lang == "" {
-		return nil, NewParseError("lang is required", nil)
+		return nil, newInvalidInputError("lang is required")
 	}
 	if os == "" {
-		return nil, NewParseError("os is required", nil)
+		return nil, newInvalidInputError("os is required")
 	}
 
 	path := fmt.Sprintf("/boot/%s/windows", serverID.String())

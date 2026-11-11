@@ -832,3 +832,44 @@ func TestShouldRetry(t *testing.T) {
 		})
 	}
 }
+
+// A 4xx/5xx body that is valid JSON but not the documented error envelope
+// must not surface as an *Error with an empty code and message.
+func TestErrorFromResponse_JSONWithoutEnvelope(t *testing.T) {
+	for _, body := range []string{`{}`, `null`, `{"message":"Bad Gateway"}`, `{"error":{}}`, `[]`, `"x"`} {
+		t.Run(body, func(t *testing.T) {
+			var e *Error
+			if !errors.As(errorFromResponse(http.StatusBadGateway, []byte(body)), &e) {
+				t.Fatal("expected *Error")
+			}
+			if e.Code != ErrUnknown || e.Status != http.StatusBadGateway {
+				t.Errorf("Code = %q, Status = %d; want %q, 502", e.Code, e.Status, ErrUnknown)
+			}
+			if want := "HTTP 502: " + body; e.Message != want {
+				t.Errorf("Message = %q, want %q", e.Message, want)
+			}
+		})
+	}
+}
+
+// The documented envelope keeps its code, message, and status.
+func TestErrorFromResponse_Envelope(t *testing.T) {
+	body := `{"error":{"status":404,"code":"SERVER_NOT_FOUND","message":"Server with id 321 not found"}}`
+	var e *Error
+	if !errors.As(errorFromResponse(http.StatusNotFound, []byte(body)), &e) {
+		t.Fatal("expected *Error")
+	}
+	if e.Code != ErrServerNotFound || e.Status != http.StatusNotFound || e.Message != "Server with id 321 not found" {
+		t.Errorf("got %+v", e)
+	}
+}
+
+func TestWithHTTPClient_NilKeepsDefault(t *testing.T) {
+	c := NewClient("user", "pass", WithHTTPClient(nil))
+	if c.httpClient == nil {
+		t.Fatal("httpClient is nil; WithHTTPClient(nil) must keep the default")
+	}
+	if c.httpClient.Timeout != DefaultTimeout {
+		t.Errorf("Timeout = %v, want %v", c.httpClient.Timeout, DefaultTimeout)
+	}
+}

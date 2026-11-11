@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 )
 
 // VSwitchServer status constants.
@@ -142,40 +141,38 @@ func (v *VSwitchService) Delete(ctx context.Context, id int, cancellationDate st
 	return v.client.DeleteWithBody(ctx, path, formData, nil)
 }
 
-// AddServers adds one or more servers to a vSwitch.
+// AddServers adds one or more servers to a vSwitch. An empty servers slice is
+// rejected with a Validation error; the API requires at least one.
 //
 // POST /vswitch/{vswitch-id}/server
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#post-vswitch-vswitch-id-server
 func (v *VSwitchService) AddServers(ctx context.Context, id int, servers []string) error {
+	if len(servers) == 0 {
+		return newInvalidInputError("at least one server is required")
+	}
 	path := fmt.Sprintf("/vswitch/%d/server", id)
 
-	// Build form data with server[] array
-	// The API expects server[]=value1&server[]=value2
-	var formParts []string
-	for _, server := range servers {
-		formParts = append(formParts, fmt.Sprintf("server[]=%s", url.QueryEscape(server)))
-	}
-	formData := strings.Join(formParts, "&")
+	// The API expects server[]=value1&server[]=value2 with literal brackets.
+	formData := appendBracketArray("", "server", servers)
 
 	// Use PostRaw to avoid url.Values encoding the brackets
 	return v.client.PostRaw(ctx, path, formData, nil)
 }
 
-// RemoveServers removes one or more servers from a vSwitch.
+// RemoveServers removes one or more servers from a vSwitch. An empty servers slice is
+// rejected with a Validation error; the API requires at least one.
 //
 // DELETE /vswitch/{vswitch-id}/server
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#delete-vswitch-vswitch-id-server
 func (v *VSwitchService) RemoveServers(ctx context.Context, id int, servers []string) error {
+	if len(servers) == 0 {
+		return newInvalidInputError("at least one server is required")
+	}
 	path := fmt.Sprintf("/vswitch/%d/server", id)
 
-	// Build form data with server[] array
-	var formParts []string
-	for _, server := range servers {
-		formParts = append(formParts, fmt.Sprintf("server[]=%s", url.QueryEscape(server)))
-	}
-	formData := strings.Join(formParts, "&")
+	formData := appendBracketArray("", "server", servers)
 
 	// Use DeleteRaw to avoid url.Values encoding the brackets
 	return v.client.DeleteRaw(ctx, path, formData, nil)

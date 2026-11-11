@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -100,89 +99,4 @@ func (e *FirewallRuleEncoder) EncodeToString(additional map[string]string) strin
 	}
 
 	return strings.Join(parts, "&")
-}
-
-// RuleBuilder helps build individual firewall rules.
-type RuleBuilder struct {
-	data map[string]string
-}
-
-// NewRuleBuilder creates a new rule builder.
-func NewRuleBuilder() *RuleBuilder {
-	return &RuleBuilder{
-		data: make(map[string]string),
-	}
-}
-
-// Name sets the rule name.
-func (r *RuleBuilder) Name(name string) *RuleBuilder {
-	r.data["name"] = name
-	return r
-}
-
-// IPVersion sets the IP version.
-func (r *RuleBuilder) IPVersion(version string) *RuleBuilder {
-	r.data["ip_version"] = version
-	return r
-}
-
-// Action sets the action (accept/discard).
-func (r *RuleBuilder) Action(action string) *RuleBuilder {
-	r.data["action"] = action
-	return r
-}
-
-// Protocol sets the protocol.
-func (r *RuleBuilder) Protocol(protocol string) *RuleBuilder {
-	r.data["protocol"] = protocol
-	return r
-}
-
-// SourceIP sets the source IP.
-func (r *RuleBuilder) SourceIP(ip string) *RuleBuilder {
-	r.data["src_ip"] = ip
-	return r
-}
-
-// DestIP sets the destination IP.
-func (r *RuleBuilder) DestIP(ip string) *RuleBuilder {
-	r.data["dst_ip"] = ip
-	return r
-}
-
-// SourcePort sets the source port.
-func (r *RuleBuilder) SourcePort(port any) *RuleBuilder {
-	r.data["src_port"] = toString(port)
-	return r
-}
-
-// DestPort sets the destination port.
-func (r *RuleBuilder) DestPort(port any) *RuleBuilder {
-	r.data["dst_port"] = toString(port)
-	return r
-}
-
-// TCPFlags sets TCP flags.
-func (r *RuleBuilder) TCPFlags(flags string) *RuleBuilder {
-	r.data["tcp_flags"] = flags
-	return r
-}
-
-// Build returns the rule data.
-func (r *RuleBuilder) Build() map[string]string {
-	return r.data
-}
-
-// toString converts various types to string.
-func toString(v any) string {
-	switch val := v.(type) {
-	case string:
-		return val
-	case int:
-		return strconv.Itoa(val)
-	case uint16:
-		return strconv.FormatUint(uint64(val), 10)
-	default:
-		return fmt.Sprintf("%v", val)
-	}
 }

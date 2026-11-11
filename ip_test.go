@@ -298,8 +298,8 @@ func TestIPService_NilIPGuard(t *testing.T) {
 				t.Errorf("expected error for nil IP, got nil")
 			}
 			var e *Error
-			if !errors.As(err, &e) || e.Kind != ErrKindParse {
-				t.Errorf("expected parse error, got %T: %v", err, err)
+			if !errors.As(err, &e) || e.Kind != ErrKindValidation {
+				t.Errorf("expected validation error, got %T: %v", err, err)
 			}
 		})
 	}
@@ -318,8 +318,8 @@ func TestIPService_InvalidLengthIPGuard(t *testing.T) {
 	client := NewClient("test-user", "test-pass", WithBaseURL(server.URL))
 	_, err := client.IP.Get(context.Background(), net.IP{1, 2, 3})
 	var e *Error
-	if !errors.As(err, &e) || e.Kind != ErrKindParse {
-		t.Fatalf("expected parse error, got %T: %v", err, err)
+	if !errors.As(err, &e) || e.Kind != ErrKindValidation {
+		t.Fatalf("expected validation error, got %T: %v", err, err)
 	}
 }
 

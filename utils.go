@@ -3,28 +3,21 @@ package hrobot
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"time"
 )
 
-// encodeForm converts a map to url.Values.
-func encodeForm(data map[string]string) url.Values {
-	values := url.Values{}
-	for k, v := range data {
-		values.Set(k, v)
-	}
-	return values
-}
+// waitMinDelay is the first delay waitForCondition sleeps between polls. It
+// is a variable only so the test binary can shorten it (see TestMain).
+var waitMinDelay = 2 * time.Second
 
 // waitForCondition polls a condition function with exponential backoff until it returns true or context times out.
 func waitForCondition(ctx context.Context, condition func() (bool, error)) error {
 	const (
-		minDelay   = 2 * time.Second
 		maxDelay   = 30 * time.Second
 		maxRetries = 30 // max ~15 minutes with exponential backoff
 	)
 
-	delay := minDelay
+	delay := waitMinDelay
 	for i := 0; i < maxRetries; i++ {
 		// Check if context is cancelled
 		select {

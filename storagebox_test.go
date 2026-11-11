@@ -811,3 +811,31 @@ func TestStorageBoxService_ErrorHandling(t *testing.T) {
 		})
 	}
 }
+
+// PUT .../subaccount/{username} documents no password field, so a Password
+// left on the shared input struct must not be sent.
+func TestStorageBoxService_UpdateSubAccount_OmitsPassword(t *testing.T) {
+	spec := loadSpec(t)
+	server := httptest.NewServer(spectest.Handler(t, spec, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		if _, present := r.PostForm["password"]; present {
+			t.Errorf("password must not be sent on update")
+		}
+		if r.FormValue("comment") != "backup" {
+			t.Errorf("comment: %q", r.FormValue("comment"))
+		}
+		w.WriteHeader(http.StatusOK)
+	})))
+	defer server.Close()
+
+	pw, comment := "MySecret123!", "backup"
+	client := NewClient("u", "p", WithBaseURL(server.URL))
+	if err := client.StorageBox.UpdateSubAccount(context.Background(), 123456, "u2342-sub1", StorageBoxSubAccountInput{
+		Comment:  &comment,
+		Password: &pw,
+	}); err != nil {
+		t.Fatalf("UpdateSubAccount: %v", err)
+	}
+}

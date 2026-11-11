@@ -8,6 +8,13 @@ import (
 )
 
 // StorageBoxService handles storage box API operations.
+//
+// Since 29 July 2025 the Robot webservice no longer manages stand-alone
+// Storage Boxes; Hetzner migrated them to the Hetzner Console, where they are
+// served by the Hetzner API (https://api.hetzner.com/v1/storage_boxes) with a
+// Console API token. Per Hetzner's Storage Box FAQ, only the free BX10 boxes
+// still attached to a dedicated server remain manageable here, so expect
+// these methods to fail for any other box.
 type StorageBoxService struct {
 	client *Client
 }
@@ -118,7 +125,9 @@ type StorageBoxSubAccountInput struct {
 	Webdav               *bool
 	ReadOnly             *bool
 	Comment              *string
-	// Password is only honoured by CreateSubAccount and ResetSubAccountPassword.
+	// Password is only sent by CreateSubAccount. UpdateSubAccount ignores
+	// it, since PUT .../subaccount/{username} documents no password field;
+	// use ResetSubAccountPassword to change an existing password.
 	Password *string
 }
 
@@ -361,13 +370,15 @@ func (s *StorageBoxService) CreateSubAccount(ctx context.Context, storageBoxID i
 	return &sub, nil
 }
 
-// UpdateSubAccount modifies a sub-account.
+// UpdateSubAccount modifies a sub-account. in.Password is not sent; use
+// ResetSubAccountPassword to change the password.
 //
 // PUT /storagebox/{storagebox-id}/subaccount/{sub-account-username}
 //
 // See: https://robot.hetzner.com/doc/webservice/en.html#put-storagebox-storagebox-id-subaccount-sub-account-username
 func (s *StorageBoxService) UpdateSubAccount(ctx context.Context, storageBoxID int, username string, in StorageBoxSubAccountInput) error {
 	path := fmt.Sprintf("/storagebox/%d/subaccount/%s", storageBoxID, url.PathEscape(username))
+	in.Password = nil
 	data := subAccountForm(in)
 	return s.client.Put(ctx, path, data, nil)
 }
