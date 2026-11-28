@@ -27,7 +27,10 @@ permissions:
 jobs:
   markdown:
     name: Markdown Lint
-    runs-on: ubuntu-latest
+    # Pinned OS release (ubuntu-latest moves to the next LTS unannounced).
+    # Dependabot cannot bump runner labels; move it by hand before GitHub
+    # retires the image.
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -39,8 +42,9 @@ jobs:
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          # markdownlint-cli2 requires Node >= 22 (see package.json engines).
-          node-version: '22'
+          # Active LTS. markdownlint-cli2 requires Node >= 22 (see package.json
+          # engines), so 22 still works locally.
+          node-version: '24'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Runs the exact command from the local pre-commit hook, driven entirely
