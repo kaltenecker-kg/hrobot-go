@@ -5,7 +5,7 @@ description of the Hetzner Robot API.
 
 - **Source:** [gist by xavierleune](https://gist.github.com/xavierleune/660084e31f291eef2442c39f4c7f97e8)
 - **Vendored:** 2026-07-11
-- **Last compared with the upstream doc:** 2026-11-11 (see "Upstream doc changes" below)
+- **Last compared with the upstream doc:** 2026-11-28 (see "Upstream doc changes" below)
 
 Hetzner ships no official machine-readable spec for the Robot API — only the
 HTML doc at <https://robot.hetzner.com/doc/webservice/en.html> and a PHP
@@ -30,6 +30,10 @@ the HTML doc. To do that, save the doc as
 `spec/upstream/robot-webservice-en.html` (git-ignored), diff its text against
 the previous snapshot, and carry every difference into the spec, the client,
 and this log.
+
+### 2026-11-28 (previous snapshot: 2026-11-11)
+
+No changes: the downloaded doc is byte-identical to the 2026-11-11 snapshot.
 
 ### 2026-11-11 (previous snapshot: 2026-09-02)
 
