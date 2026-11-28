@@ -8,10 +8,10 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "markdownlint-cli2": "^0.24.0"
+    "markdownlint-cli2": "^0.24.2"
   },
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@11.25.0"
+  "packageManager": "pnpm@11.28.13"
 }

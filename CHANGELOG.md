@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+IMPROVEMENTS:
+
+- **deps**: Bump minimum Go to 1.27. Go 1.26 users must upgrade their toolchain (or stay on v2.4.x)
+
 ## 2.4.0 (2026-11-11)
 
 BUG FIXES:

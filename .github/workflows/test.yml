@@ -49,7 +49,10 @@ permissions:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    # Pinned OS release (ubuntu-latest moves to the next LTS unannounced).
+    # Dependabot cannot bump runner labels; move it by hand before GitHub
+    # retires the image.
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,10 +60,10 @@ jobs:
           # Nothing here pushes, so keep the GITHUB_TOKEN out of .git/config
           # where later steps (and any tool they run) could read it.
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: 'go.mod'
-          # go.mod pins the minimum (1.26); fetch the latest 1.26.x patch so CI
+          # go.mod pins the minimum (1.27); fetch the latest 1.27.x patch so CI
           # picks up standard-library security fixes (e.g. the 1.26.5 crypto/tls
           # fix) instead of a stale runner-preinstalled patch.
           check-latest: true
@@ -81,16 +84,19 @@ jobs:
   test:
     name: Unit Tests
     needs: build
-    runs-on: ubuntu-latest
+    # Pinned OS release (ubuntu-latest moves to the next LTS unannounced).
+    # Dependabot cannot bump runner labels; move it by hand before GitHub
+    # retires the image.
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: 'go.mod'
-          # go.mod pins the minimum (1.26); fetch the latest 1.26.x patch so CI
+          # go.mod pins the minimum (1.27); fetch the latest 1.27.x patch so CI
           # picks up standard-library security fixes (e.g. the 1.26.5 crypto/tls
           # fix) instead of a stale runner-preinstalled patch.
           check-latest: true
@@ -100,16 +106,19 @@ jobs:
 
   quality:
     name: Module Quality
-    runs-on: ubuntu-latest
+    # Pinned OS release (ubuntu-latest moves to the next LTS unannounced).
+    # Dependabot cannot bump runner labels; move it by hand before GitHub
+    # retires the image.
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: 'go.mod'
-          # go.mod pins the minimum (1.26); fetch the latest 1.26.x patch so CI
+          # go.mod pins the minimum (1.27); fetch the latest 1.27.x patch so CI
           # picks up standard-library security fixes (e.g. the 1.26.5 crypto/tls
           # fix) instead of a stale runner-preinstalled patch.
           check-latest: true
